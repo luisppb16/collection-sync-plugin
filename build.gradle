@@ -1,0 +1,107 @@
+/*
+ * *****************************************************************************
+ * Copyright (c)  2026 Luis Paolo Pepe Barra (@LuisPPB16).
+ * All rights reserved.
+ * *****************************************************************************
+ */
+
+plugins {
+    id 'java'
+    id 'org.jetbrains.intellij.platform' version '2.18.1'
+    id 'jacoco'
+}
+
+group = 'com.luisppb16'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
+}
+
+dependencies {
+    // JSON/YAML - Jackson (collections Postman v2.1 e Insomnia v4)
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.5'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.5'
+
+    // Instance factory for tests
+    testImplementation 'org.instancio:instancio-junit:6.0.0'
+
+    // Testing
+    // JUnit 4 is kept on the test classpath because the IntelliJ Platform test framework
+    // (used via the bundled test infrastructure) references org.junit.rules.TestRule at runtime.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.4'
+    testImplementation 'org.mockito:mockito-core:5.23.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.23.0'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    intellijPlatform {
+        intellijIdea '2026.2'
+        bundledPlugin 'com.intellij.java'
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+    options.compilerArgs << "-Xlint:all" << "-Werror" << "-Xlint:-unchecked"
+}
+
+intellijPlatform {
+    buildSearchableOptions = false
+
+    signing {
+        certificateChain.set(providers.environmentVariable("CERTIFICATE_CHAIN"))
+        privateKey.set(providers.environmentVariable("PRIVATE_KEY"))
+        password.set(providers.environmentVariable("PRIVATE_KEY_PASSWORD"))
+    }
+
+    publishing {
+        token.set(providers.environmentVariable("PUBLISH_TOKEN"))
+    }
+
+    pluginVerification {
+        ides {
+            recommended()
+        }
+    }
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    maxHeapSize = '512m'
+    jvmArgs('-Xshare:off')
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// These tasks come from the IntelliJ Platform plugin; guard with findByName so the build script
+// does not fail in environments where they are not registered.
+['buildSearchableOptions', 'jarSearchableOptions'].each { name ->
+    def task = tasks.findByName(name)
+    if (task != null) {
+        task.enabled = false
+    }
+}

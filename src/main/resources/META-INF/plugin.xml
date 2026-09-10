@@ -1,0 +1,56 @@
+<!--
+  ~ ******************************************************************************
+  ~ Copyright (c)  2026 Luis Paolo Pepe Barra (@LuisPPB16).
+  ~ All rights reserved.
+  ~ ******************************************************************************
+  -->
+
+<idea-plugin>
+    <id>com.luisppb16.collectionsync</id>
+    <name>CollectionSync</name>
+    <vendor email="ironkrozz@gmail.com" url="https://github.com/luisppb16">Luis Pepe</vendor>
+
+    <idea-version since-build="262"/>
+
+    <description><![CDATA[
+    Keep your Postman and Insomnia collections in sync with your code.
+
+    CollectionSync discovers the REST endpoints declared in your Java project (Spring, JAX-RS/Quarkus and Micronaut),
+    imports your existing Postman (v2.1) or Insomnia (v4) collections and shows you, endpoint by endpoint, which
+    requests are missing, incomplete or orphaned. It designs the missing requests for you — happy path, method, path,
+    body built from your DTOs, query/path parameters and headers — and lets you merge them into the collection and
+    export it back to Postman or Insomnia.
+
+    <h2>Main Features</h2>
+    <ul>
+        <li><b>Endpoint Discovery:</b> Scans Spring (@RestController, @RequestMapping...), JAX-RS/Quarkus (@Path, @GET...)
+        and Micronaut (@Controller, @Get...) controllers to build the full list of REST endpoints in your project.</li>
+        <li><b>Collection Import:</b> Import Postman v2.1 or Insomnia v4 collections (JSON and YAML) with faithful
+        round-trip of scripts, auth, variables and responses.</li>
+        <li><b>Coverage Tracking:</b> See which endpoints have no request, which requests are incomplete (missing
+        params, headers or body) and which requests no longer match any endpoint.</li>
+        <li><b>Request Generation:</b> Design requests for discovered endpoints with example bodies generated from
+        your DTOs, path/query parameters and headers.</li>
+        <li><b>Collection Completion:</b> Merge the generated requests into an imported collection without duplicates
+        (preview with what will be added before saving).</li>
+        <li><b>Export:</b> Export the collection as Postman v2.1 JSON or Insomnia v4 (JSON/YAML).</li>
+        <li><b>Integrated Tool Window:</b> A dedicated panel with endpoint, collection and coverage trees, with direct
+        navigation to the controller method.</li>
+    </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <h3>1.0.0</h3>
+        <ul>
+            <li><b>Initial Release.</b></li>
+        </ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="withJava.xml">com.intellij.modules.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="CollectionSync Notifications"
+                           displayType="BALLOON"/>
+    </extensions>
+</idea-plugin>
