@@ -6,19 +6,22 @@
  */
 package com.luisppb16.collectionsync.domain.model;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * A folder of a collection tree: a Postman folder or an Insomnia request group. Mutable on
- * purpose: the merge step inserts generated requests into the tree before export.
+ * purpose: the merge step inserts generated requests into the tree before export. {@code rawExtra}
+ * keeps the format-native node of imported folders for faithful re-export.
  */
 public final class CollectionFolder {
 
   private String name;
   private final List<CollectionFolder> children;
   private final List<RequestDescriptor> requests;
+  private JsonNode rawExtra;
 
   public CollectionFolder(String name) {
     this.name = Objects.requireNonNull(name, "name");
@@ -36,6 +39,15 @@ public final class CollectionFolder {
 
   public List<CollectionFolder> getChildren() {
     return children;
+  }
+
+  /** @return the format-native node of the imported folder, for passthrough; null when generated. */
+  public JsonNode getRawExtra() {
+    return rawExtra;
+  }
+
+  public void setRawExtra(JsonNode rawExtra) {
+    this.rawExtra = rawExtra;
   }
 
   public List<RequestDescriptor> getRequests() {

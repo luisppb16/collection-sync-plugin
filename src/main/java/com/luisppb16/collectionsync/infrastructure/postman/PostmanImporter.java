@@ -56,7 +56,7 @@ public final class PostmanImporter implements CollectionImporter {
     CollectionFolder rootFolder = new CollectionFolder(name);
     readItems(root.path("item"), rootFolder);
 
-    return new CollectionModel(id, name, rootFolder, variables, RequestSource.POSTMAN.name());
+    return new CollectionModel(id, name, rootFolder, variables, RequestSource.POSTMAN.name(), root.deepCopy());
   }
 
   private static Map<String, String> readVariables(JsonNode variablesNode) {
@@ -80,6 +80,7 @@ public final class PostmanImporter implements CollectionImporter {
       String name = item.path("name").asText("");
       if (item.hasNonNull("item")) {
         CollectionFolder folder = parentFolder.findOrCreateChild(name);
+        folder.setRawExtra(item.deepCopy());
         readItems(item.path("item"), folder);
       } else if (item.hasNonNull("request")) {
         RequestDescriptor request = readRequest(name, item, parentFolder.getName());

@@ -1,0 +1,53 @@
+_type: export
+__export_format: 4
+__export_date: "2026-09-10T10:00:00.000Z"
+__export_source: insomnia.desktop.app:v2023.5.8
+resources:
+  - _id: wrk_5f4c3b2a111122223333444455556666
+    _type: workspace
+    parentId: null
+    name: Users API Workspace
+    description: Workspace description
+  - _id: fld_users000000000000000000000000000
+    _type: request_group
+    parentId: wrk_5f4c3b2a111122223333444455556666
+    name: Users
+    metaSortKey: -100
+  - _id: req_listusers00000000000000000000000
+    _type: request
+    parentId: fld_users000000000000000000000000000
+    name: List users
+    method: GET
+    url: "{{ _.base_url }}/users?include=roles"
+    headers: []
+    parameters:
+      - name: include
+        value: roles
+        disabled: false
+    metaSortKey: -90
+  - _id: req_createuser0000000000000000000000
+    _type: request
+    parentId: fld_users000000000000000000000000000
+    name: Create user
+    method: POST
+    url: "{{ _.base_url }}/users"
+    headers:
+      - name: X-Auth
+        value: "{{ _.token }}"
+        disabled: false
+    body:
+      mimeType: application/json
+      text: '{"name": "Ada", "email": "ada@example.com"}'
+    metaSortKey: -80
+  - _id: env_base0000000000000000000000000000
+    _type: environment
+    parentId: wrk_5f4c3b2a111122223333444455556666
+    name: Base Environment
+    data:
+      base_url: https://api.example.com
+      token: secret-token
+  - _id: spc_00000000000000000000000000000000
+    _type: api_spec
+    parentId: wrk_5f4c3b2a111122223333444455556666
+    fileName: Users API
+    contents: ""
