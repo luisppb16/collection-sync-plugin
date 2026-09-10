@@ -81,6 +81,24 @@ public final class PathTemplateNormalizer {
     return parse(stripQuery(stripHost(stripScheme(rawUrl.trim()))), true);
   }
 
+  /**
+   * Serializes a normalized template to its canonical form: literals verbatim, variables as
+   * {@code {name}} and wildcards as {@code *}. This string is the dedupe key of requests.
+   *
+   * @param template the normalized template
+   * @return the canonical form, e.g. {@code users/{id}}
+   */
+  public static String canonicalForm(PathTemplate template) {
+    Objects.requireNonNull(template, "template");
+    return template.segments().stream()
+        .map(segment -> switch (segment) {
+          case Literal literal -> literal.value();
+          case Variable variable -> "{" + variable.name() + "}";
+          case Wildcard ignored -> "*";
+        })
+        .collect(java.util.stream.Collectors.joining("/"));
+  }
+
   private static String join(String basePath, String methodPath) {
     String base = basePath.trim();
     String method = methodPath.trim();
