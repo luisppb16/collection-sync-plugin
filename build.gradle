@@ -5,6 +5,8 @@
  * *****************************************************************************
  */
 
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+
 plugins {
     id 'java'
     id 'org.jetbrains.intellij.platform' version '2.18.1'
@@ -42,7 +44,15 @@ dependencies {
     intellijPlatform {
         intellijIdea '2026.2'
         bundledPlugin 'com.intellij.java'
+        // IntelliJ Platform test framework (BasePlatformTestCase) for PSI-level tests.
+        // Groovy does not auto-resolve Kotlin objects, so INSTANCE must be used explicitly.
+        testFramework TestFrameworkType.Platform.INSTANCE
+        // Java test framework: mock JDK so JDK types (String, List, Optional) resolve in PSI tests.
+        testFramework TestFrameworkType.Plugin.Java.INSTANCE
     }
+
+    // Runs the JUnit3/JUnit4-style BasePlatformTestCase suites on the JUnit Platform.
+    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine:5.14.4'
 }
 
 java {

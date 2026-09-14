@@ -7,10 +7,17 @@
 
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij">
+        <projectService serviceImplementation="com.luisppb16.collectionsync.infrastructure.psi.EndpointIndexService"/>
+
         <toolWindow id="CollectionSync"
                     secondary="false"
                     icon="/icons/pluginIcon.svg"
                     anchor="right"
                     factoryClass="com.luisppb16.collectionsync.ui.toolwindow.CollectionSyncToolWindowFactory"/>
     </extensions>
+
+    <projectListeners>
+        <listener class="com.luisppb16.collectionsync.infrastructure.psi.EndpointIndexInvalidator"
+                  topic="com.intellij.psi.util.PsiModificationTracker"/>
+    </projectListeners>
 </idea-plugin>
