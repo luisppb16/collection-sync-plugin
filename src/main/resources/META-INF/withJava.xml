@@ -7,17 +7,53 @@
 
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="com.luisppb16.collectionsync.infrastructure.psi.EndpointIndexService"/>
+        <projectService serviceImplementation="com.luisppb16.collectionsync.settings.EndpointCoverageSettings"/>
 
-        <toolWindow id="CollectionSync"
+        <projectConfigurable instance="com.luisppb16.collectionsync.settings.EndpointCoverageConfigurable"
+                             id="EndpointCoverage"
+                             displayName="Endpoint Coverage"
+                             nonDefaultProject="false"/>
+
+        <toolWindow id="Endpoint Coverage"
                     secondary="false"
                     icon="/icons/pluginIcon.svg"
                     anchor="right"
-                    factoryClass="com.luisppb16.collectionsync.ui.toolwindow.CollectionSyncToolWindowFactory"/>
+                    factoryClass="com.luisppb16.collectionsync.ui.toolwindow.EndpointCoverageToolWindowFactory"/>
     </extensions>
 
-    <projectListeners>
-        <listener class="com.luisppb16.collectionsync.infrastructure.psi.EndpointIndexInvalidator"
-                  topic="com.intellij.psi.util.PsiModificationTracker"/>
-    </projectListeners>
+    <!--
+      Action texts and descriptions are localized through the resource bundle: the platform resolves
+      the keys action.<actionId>.text and action.<actionId>.description (see
+      messages/EndpointCoverageBundle.properties). The text/description attributes below are kept
+      only as an English fallback in case the bundle keys are missing: when the bundle is declared,
+      the bundle value always wins. getTemplateText() cannot be overridden for this (it is final on
+      the 2026.2 platform).
+    -->
+    <actions resource-bundle="messages.EndpointCoverageBundle">
+        <action id="collectionsync.AnalyzeEndpointsCoverage"
+                class="com.luisppb16.collectionsync.actions.ScanEndpointCoverageAction"
+                text="Analyze Endpoints Coverage"
+                description="Analyzes the endpoint coverage of this project and opens the Endpoint Coverage tool window"
+                icon="/icons/pluginIcon.svg">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="collectionsync.UseAsCollection"
+                class="com.luisppb16.collectionsync.actions.UseAsCollectionAction"
+                text="Endpoint Coverage: Check Coverage with This Collection"
+                description="Adds this collection file (Postman v2.1 / Insomnia v4) to the coverage settings and rescans"
+                icon="/icons/pluginIcon.svg">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+
+        <action id="collectionsync.UseAsOpenApiSource"
+                class="com.luisppb16.collectionsync.actions.UseAsOpenApiSourceAction"
+                text="Endpoint Coverage: Use as OpenAPI Source"
+                description="Uses this OpenAPI 3.x document as the endpoint coverage source and rescans"
+                icon="/icons/pluginIcon.svg">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

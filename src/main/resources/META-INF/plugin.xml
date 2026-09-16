@@ -12,37 +12,47 @@
 
     <idea-version since-build="262"/>
 
+    <!--
+      The description and change-notes are intentionally kept in English: they are consumed by the
+      JetBrains Marketplace. All other user-visible strings are localized through
+      messages/EndpointCoverageBundle (see README "Idiomas").
+    -->
     <description><![CDATA[
     Keep your Postman and Insomnia collections in sync with your code.
 
-    CollectionSync discovers the REST endpoints declared in your Java project (Spring, JAX-RS/Quarkus and Micronaut),
-    imports your existing Postman (v2.1) or Insomnia (v4) collections and shows you, endpoint by endpoint, which
-    requests are missing, incomplete or orphaned. It designs the missing requests for you — happy path, method, path,
-    body built from your DTOs, query/path parameters and headers — and lets you merge them into the collection and
-    export it back to Postman or Insomnia.
+    CollectionSync — Endpoint Coverage Tracker compares the REST endpoints declared in your Java
+    project (OpenAPI 3.x documents, Spring MVC and JAX-RS/Quarkus controllers) against the requests
+    of your existing Postman (v2.1) and Insomnia (v4) collections. The "Endpoint Coverage" tool
+    window shows, endpoint by endpoint, which ones are covered, uncovered, orphaned or excluded,
+    lets you navigate to the handler method, exclude noisy endpoints from the calculation and
+    export the full report as Markdown or CSV.
 
     <h2>Main Features</h2>
     <ul>
-        <li><b>Endpoint Discovery:</b> Scans Spring (@RestController, @RequestMapping...), JAX-RS/Quarkus (@Path, @GET...)
-        and Micronaut (@Controller, @Get...) controllers to build the full list of REST endpoints in your project.</li>
-        <li><b>Collection Import:</b> Import Postman v2.1 or Insomnia v4 collections (JSON and YAML) with faithful
-        round-trip of scripts, auth, variables and responses.</li>
-        <li><b>Coverage Tracking:</b> See which endpoints have no request, which requests are incomplete (missing
-        params, headers or body) and which requests no longer match any endpoint.</li>
-        <li><b>Request Generation:</b> Design requests for discovered endpoints with example bodies generated from
-        your DTOs, path/query parameters and headers.</li>
-        <li><b>Collection Completion:</b> Merge the generated requests into an imported collection without duplicates
-        (preview with what will be added before saving).</li>
-        <li><b>Export:</b> Export the collection as Postman v2.1 JSON or Insomnia v4 (JSON/YAML).</li>
-        <li><b>Integrated Tool Window:</b> A dedicated panel with endpoint, collection and coverage trees, with direct
-        navigation to the controller method.</li>
+        <li><b>Endpoint Discovery:</b> Scans Spring (@RestController, @RequestMapping...) and
+        JAX-RS/Quarkus (@Path, @GET...) controllers, or a local OpenAPI 3.x document, to build the
+        list of REST endpoints in your project.</li>
+        <li><b>Collection Import:</b> Parses Postman v2.1 or Insomnia v4 collections (JSON and
+        YAML), tolerating broken files without aborting the report.</li>
+        <li><b>Coverage Tracking:</b> Classifies every endpoint as COVERED, UNCOVERED or ORPHAN,
+        with structural path matching (variables match by position, strict mode keeps
+        {@code /users/{id}} apart from {@code /users/me}).</li>
+        <li><b>Exclusions:</b> Right-click any endpoint to exclude it from the calculation
+        (e.g. {@code /actuator/{name}}); excluded rows stay visible so the exclusion can be
+        undone with one click.</li>
+        <li><b>Navigation:</b> Double-click a row to jump to the controller method, or to the
+        configured OpenAPI document.</li>
+        <li><b>Export:</b> Export the complete report (including excluded rows) as Markdown or
+        CSV.</li>
     </ul>
     ]]></description>
 
     <change-notes><![CDATA[
         <h3>1.0.0</h3>
         <ul>
-            <li><b>Initial Release.</b></li>
+            <li><b>Endpoint Coverage Tracker.</b> Coverage tool window comparing OpenAPI/Spring/JAX-RS
+            endpoints with Postman v2.1 and Insomnia v4 collections: status table with filters,
+            navigation to handlers, exclusion rules and Markdown/CSV report export.</li>
         </ul>
     ]]></change-notes>
 

@@ -87,12 +87,23 @@ intellijPlatform {
     }
 }
 
+// The IntelliJ test fixture persists its index caches in the sandbox system directory
+// (.intellijPlatform/sandbox/.../system-test) between runs; a corrupted persisted index makes the
+// suite flaky (ServiceNotReadyException / StorageException), so each test run starts from a fresh
+// system directory instead of reusing the persisted index storage.
+def intellijTestSystemPath = layout.buildDirectory.dir('intellij-system-test')
+tasks.register('cleanIntellijTestSystem', Delete) {
+    delete intellijTestSystemPath
+}
+
 test {
     useJUnitPlatform()
     testLogging {
         events "passed", "skipped", "failed"
     }
-    maxHeapSize = '512m'
+    dependsOn cleanIntellijTestSystem
+    systemProperty 'idea.system.path', intellijTestSystemPath.get().asFile.absolutePath
+    maxHeapSize = '2g'
     jvmArgs('-Xshare:off')
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(25)

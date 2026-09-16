@@ -4,21 +4,33 @@
  * All rights reserved.
  * *****************************************************************************
  */
+
 package com.luisppb16.collectionsync.domain.model;
 
-/** HTTP methods supported by collections and endpoints. */
+import java.util.Locale;
+
+/** HTTP methods supported by the coverage calculation. */
 public enum HttpMethod {
   GET,
   POST,
   PUT,
-  PATCH,
   DELETE,
+  PATCH,
   HEAD,
-  OPTIONS,
-  TRACE;
+  OPTIONS;
 
-  /** @return the canonical method name, for URL-independent logging and naming. */
-  public String asName() {
-    return name();
+  /**
+   * Parses an HTTP method, normalizing it to upper case.
+   *
+   * @param raw raw method name as found in a collection file or annotation; must not be {@code
+   *     null}
+   * @return the matching constant
+   * @throws IllegalArgumentException if the raw value is null, blank or not a supported method
+   */
+  public static HttpMethod of(String raw) {
+    if (raw == null || raw.isBlank()) {
+      throw new IllegalArgumentException("HTTP method must not be null or blank");
+    }
+    return HttpMethod.valueOf(raw.strip().toUpperCase(Locale.ROOT));
   }
 }
