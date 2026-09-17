@@ -8,10 +8,9 @@
 package com.luisppb16.collectionsync.collection;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -33,13 +32,15 @@ import org.jetbrains.annotations.NotNull;
  *   <li>a <b>v5 nested collection</b>: an object whose {@code type} starts with {@code
  *       collection.insomnia.rest/} (e.g. {@code collection.insomnia.rest/5.0}), carrying a nested
  *       {@code collection} tree in which folders (nodes with a {@code children} array) hold their
- *       requests and sub-folders at any depth. A v5 export whose {@code collection} is missing or
- *       is not an array fails fast, as do sibling v5 namespaces such as {@code spec.insomnia.rest/}
- *       or {@code environment.insomnia.rest/}, which are not collections.
+ *       requests and sub-folders at any depth; a node may carry both a usable request and a {@code
+ *       children} array, in which case its own request and its children are both collected. A v5
+ *       export whose {@code collection} is missing or is not an array fails fast, as do sibling v5
+ *       namespaces such as {@code spec.insomnia.rest/} or {@code environment.insomnia.rest/}, which
+ *       are not collections.
  * </ul>
  *
- * <p>Because {@code jackson-dataformat-yaml} also parses JSON, both YAML and JSON encodings are
- * handled by the same mapper.
+ * <p>Both YAML and JSON encodings are handled through {@link JsonYaml} (content-based, so the file
+ * extension never matters, and aliases/merge keys are expanded before the tree is built).
  *
  * <p>Requests are the resources/nodes with a usable {@code method} and {@code url}: the HTTP method
  * comes from {@code method}, the URL from {@code url} and the display name from {@code name}. The
@@ -47,12 +48,12 @@ import org.jetbrains.annotations.NotNull;
  * or from the root object's {@code name} (v5), falling back to the file name without extension when
  * there is none. Every other resource type ({@code request_group}, {@code environment}, {@code
  * api_spec}, {@code unit_test}, ...) and the {@code environments} block of a v5 export are ignored,
- * as are requests without a usable method or URL. An unsupported HTTP method fails fast with an
- * {@link IllegalArgumentException}, as does a root that matches neither shape.
+ * as are requests without a usable method or URL. A {@code method}/{@code url} that is present but
+ * not text (e.g. a YAML 1.1 value like {@code no} or {@code on}, which parses as a boolean) fails
+ * fast with an {@link IllegalArgumentException}, as do an unsupported HTTP method and a root that
+ * matches neither shape.
  */
 public final class InsomniaCollectionParser implements CollectionParser {
-
-  private static final ObjectMapper YAML_MAPPER = new YAMLMapper();
 
   private static final String V5_COLLECTION_TYPE_PREFIX = "collection.insomnia.rest/";
 
@@ -101,8 +102,17 @@ public final class InsomniaCollectionParser implements CollectionParser {
   }
 
   private static ApiRequest toRequest(JsonNode resource, String collectionName) {
-    String method = resource.path("method").asText("").strip();
-    String rawUrl = resource.path("url").asText("").strip();
+    JsonNode methodNode = resource.path("method");
+    JsonNode urlNode = resource.path("url");
+    if (methodNode.isMissingNode() || urlNode.isMissingNode()) {
+      return null;
+    }
+    if (!methodNode.isTextual() || !urlNode.isTextual()) {
+      throw new IllegalArgumentException(
+          "Request 'method' and 'url' must be text values: " + resource.path("name").asText(""));
+    }
+    String method = methodNode.asText().strip();
+    String rawUrl = urlNode.asText().strip();
     if (method.isEmpty() || rawUrl.isEmpty()) {
       return null;
     }
@@ -138,17 +148,30 @@ public final class InsomniaCollectionParser implements CollectionParser {
   }
 
   private static Stream<ApiRequest> requestsOf(JsonNode node, String collectionName) {
-    if (node.hasNonNull("children") && node.get("children").isArray()) {
-      return collectRequests(node.get("children"), collectionName).stream();
+    Stream<ApiRequest> own = Stream.ofNullable(toRequest(node, collectionName));
+    JsonNode children = node.get("children");
+    if (children != null && children.isArray()) {
+      return Stream.concat(own, collectRequests(children, collectionName).stream());
     }
-    return Stream.ofNullable(toRequest(node, collectionName));
+    return own;
   }
 
   @Override
   @NotNull
   public List<ApiRequest> parse(@NotNull File file) throws IOException {
     Objects.requireNonNull(file, "file must not be null");
-    JsonNode root = YAML_MAPPER.readTree(file);
+    return parseRoot(JsonYaml.readTree(file), file);
+  }
+
+  /**
+   * Parses an already-read root tree; shared with {@link CollectionParsers#parse(File)} so a file
+   * is only read once on the scan path.
+   *
+   * @param root parsed document root; must not be null
+   * @param file file the root was read from; must not be null
+   * @return the collected requests; never null, possibly empty
+   */
+  List<ApiRequest> parseRoot(@NotNull JsonNode root, @NotNull File file) {
     if (isV5Collection(root)) {
       return parseV5Collection(root, file);
     }

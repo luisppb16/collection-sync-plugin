@@ -199,6 +199,27 @@ class CollectionParsersTest {
   }
 
   @Test
+  @DisplayName(
+      "Given the Insomnia v5 fixture file, when the one-shot parse is used, then the requests are collected in a single read")
+  void parsesFileInSingleRead() throws IOException, URISyntaxException {
+    URL url = CollectionParsersTest.class.getResource("/collections/insomnia-v5-sample.yaml");
+    assertThat(url).isNotNull();
+    File file = Path.of(url.toURI()).toFile();
+
+    List<ApiRequest> requests = CollectionParsers.parse(file);
+
+    assertThat(requests).hasSize(3);
+    assertThat(requests.getFirst().name()).isEqualTo("List users");
+    assertThat(requests.getFirst().collectionName()).isEqualTo("Users API v5");
+  }
+
+  @Test
+  @DisplayName("Given a null file, when the one-shot parse is used, then it fails fast")
+  void parseFailsFastOnNull() {
+    assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.parse(null));
+  }
+
+  @Test
   @DisplayName("Given a null file, when forFile is used, then it fails fast")
   void forFileFailsFastOnNull() {
     assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.forFile(null));

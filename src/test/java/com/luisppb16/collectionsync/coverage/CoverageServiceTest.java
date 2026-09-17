@@ -83,6 +83,23 @@ class CoverageServiceTest {
     assertThat(output.errors()).hasSize(2);
   }
 
+  @Test
+  @DisplayName(
+      "Given a collection file that parses to no requests, when the scan is computed, then an error is recorded for it")
+  void recordsErrorForEmptyCollection() throws IOException {
+    Path empty = write("empty-collection.json", "{\"resources\": []}");
+
+    ScanOutput output = CoverageService.computeScan(List.of(), List.of(empty.toFile()), List.of());
+
+    assertThat(output.result().orphanCount()).isZero();
+    assertThat(output.errors()).hasSize(1);
+    assertThat(output.errors().getFirst())
+        .startsWith(
+            // Resolved through the bundle so the assertion holds in any locale.
+            EndpointCoverageBundle.message(
+                "service.error.collection.empty", "empty-collection.json"));
+  }
+
   private Path write(String fileName, String content) throws IOException {
     Path path = tempDir.resolve(fileName);
     Files.writeString(path, content);

@@ -27,6 +27,9 @@ dependencies {
     // JSON/YAML - Jackson (collections Postman v2.1 e Insomnia v4/v5)
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.5'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.5'
+    // Declared explicitly: JsonYaml drives SnakeYAML directly to expand YAML aliases/merge keys
+    // (Jackson's YAML parser keeps them as raw text).
+    implementation 'org.yaml:snakeyaml:2.5'
 
     // Instance factory for tests
     testImplementation 'org.instancio:instancio-junit:6.0.0'

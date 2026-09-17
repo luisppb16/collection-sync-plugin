@@ -66,6 +66,30 @@ class PostmanCollectionParserTest {
 
   @Test
   @DisplayName(
+      "Given a Postman collection written as YAML, when it is parsed, then its requests are collected")
+  void parsesYamlEncodedCollection() throws IOException {
+    File file =
+        writeFile(
+            "postman.yaml",
+            """
+                info:
+                  name: "YAML Postman"
+                item:
+                  - name: "Ping"
+                    request:
+                      method: GET
+                      url: /ping
+                """);
+
+    List<ApiRequest> requests = PARSER.parse(file);
+
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().name()).isEqualTo("Ping");
+    assertThat(requests.getFirst().collectionName()).isEqualTo("YAML Postman");
+  }
+
+  @Test
+  @DisplayName(
       "Given a collection with an empty folder and no requests, when it is parsed, then an empty list is returned")
   void returnsEmptyListForCollectionWithoutRequests() throws IOException {
     File file =
@@ -177,6 +201,26 @@ class PostmanCollectionParserTest {
                 {"info": {"name": "X"}, "item": [
                   {"request": {"method": "FOO", "url": "/x"}}
                 ]}""");
+
+    assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
+  }
+
+  @Test
+  @DisplayName(
+      "Given a request whose method is coerced to a boolean by YAML 1.1, when it is parsed, then it fails fast")
+  void failsFastOnYamlCoercedMethod() throws IOException {
+    File file =
+        writeFile(
+            "coerced-method.yaml",
+            """
+                info:
+                  name: "X"
+                item:
+                  - name: "Weird"
+                    request:
+                      method: on
+                      url: /ping
+                """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }

@@ -96,6 +96,7 @@ public final class CoveragePanel extends JPanel {
       new JLabel(EndpointCoverageBundle.message("toolwindow.summary.empty"));
   private final JBTable table = new JBTable(tableModel);
   private JButton exportButton;
+
   /**
    * Builds the panel and schedules the first scan so the table is never empty on open, unless the
    * user disabled the automatic scan: then the panel starts in its empty state and only the manual
@@ -366,7 +367,8 @@ public final class CoveragePanel extends JPanel {
     if (selected.length == 0) {
       return;
     }
-    EndpointCoverageSettings.State updated = stateForUpdate();
+    EndpointCoverageSettings.State updated =
+        EndpointCoverageSettings.copyForUpdate(settings.getState());
     updated.collectionFilePaths =
         new ArrayList<>(
             Stream.concat(
@@ -498,7 +500,8 @@ public final class CoveragePanel extends JPanel {
   }
 
   private void exclude(@NotNull CoverageRow row) {
-    EndpointCoverageSettings.State updated = stateForUpdate();
+    EndpointCoverageSettings.State updated =
+        EndpointCoverageSettings.copyForUpdate(settings.getState());
     updated.exclusions.add(
         new EndpointCoverageSettings.ExclusionEntry(row.method().name(), row.path()));
     settings.setState(updated);
@@ -507,21 +510,11 @@ public final class CoveragePanel extends JPanel {
 
   private void removeExclusion(@NotNull CoverageRow row) {
     List<Segment> rowSegments = PathNormalizer.normalize(row.path());
-    EndpointCoverageSettings.State updated = stateForUpdate();
+    EndpointCoverageSettings.State updated =
+        EndpointCoverageSettings.copyForUpdate(settings.getState());
     updated.exclusions.removeIf(entry -> sameExclusion(entry, row.method(), rowSegments));
     settings.setState(updated);
     rescan();
-  }
-
-  private @NotNull EndpointCoverageSettings.State stateForUpdate() {
-    EndpointCoverageSettings.State current = settings.getState();
-    EndpointCoverageSettings.State updated = new EndpointCoverageSettings.State();
-    updated.sourceType = current.sourceType;
-    updated.openApiFilePath = current.openApiFilePath;
-    updated.collectionFilePaths = new ArrayList<>(current.collectionFilePaths);
-    updated.exclusions = new ArrayList<>(current.exclusions);
-    updated.autoScanOnProjectOpen = current.autoScanOnProjectOpen;
-    return updated;
   }
 
   private @Nullable CoverageRow rowAtView(int viewRow) {

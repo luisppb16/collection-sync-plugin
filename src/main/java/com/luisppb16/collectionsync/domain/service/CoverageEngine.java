@@ -69,44 +69,34 @@ public final class CoverageEngine {
       List<ApiEndpoint> endpoints, List<ApiRequest> requests, List<ExclusionRule> exclusions) {
     List<Rule> rules =
         exclusions.stream().map(rule -> new Rule(rule.method(), rule.segments())).toList();
-    List<Rule> excludedEndpoints =
+    List<Shape> shapes =
         endpoints.stream()
-            .filter(endpoint -> isExcluded(endpoint, rules))
             .map(
                 endpoint ->
-                    new Rule(endpoint.method(), PathNormalizer.normalize(endpoint.pathTemplate())))
+                    new Shape(
+                        endpoint,
+                        new Rule(
+                            endpoint.method(), PathNormalizer.normalize(endpoint.pathTemplate()))))
             .toList();
-    List<ApiEndpoint> excludedEndpointList =
-        endpoints.stream().filter(endpoint -> isExcluded(endpoint, rules)).toList();
-    List<CoverageRow> excludedRows =
-        excludedEndpointList.stream()
-            .map(
-                endpoint ->
-                    new CoverageRow(
-                        CoverageStatus.EXCLUDED,
-                        endpoint.method(),
-                        endpoint.pathTemplate(),
-                        endpoint.ownerClass(),
-                        endpoint.moduleName(),
-                        endpoint.psiMethod()))
-            .toList();
-    List<ApiEndpoint> includedEndpoints =
-        endpoints.stream().filter(endpoint -> !isExcluded(endpoint, rules)).toList();
-
-    List<CoverageRow> endpointRows =
-        includedEndpoints.stream().map(endpoint -> toRow(endpoint, requests)).toList();
-    List<CoverageRow> orphanRows =
+    List<Shape> excludedShapes =
+        shapes.stream().filter(shape -> isExcludedByRules(shape, rules)).toList();
+    List<Shape> includedShapes =
+        shapes.stream().filter(shape -> !isExcludedByRules(shape, rules)).toList();
+    List<RequestShape> requestShapes =
         requests.stream()
-            .filter(request -> isOrphan(request, rules, excludedEndpoints, includedEndpoints))
-            .map(
-                request ->
-                    new CoverageRow(
-                        CoverageStatus.ORPHAN,
-                        request.method(),
-                        request.rawUrl(),
-                        request.collectionName(),
-                        "",
-                        null))
+            .map(request -> new RequestShape(request, PathNormalizer.normalize(request.rawUrl())))
+            .toList();
+
+    List<CoverageRow> excludedRows =
+        excludedShapes.stream()
+            .map(shape -> rowOf(shape.endpoint(), CoverageStatus.EXCLUDED))
+            .toList();
+    List<CoverageRow> endpointRows =
+        includedShapes.stream().map(shape -> toRow(shape, requestShapes)).toList();
+    List<CoverageRow> orphanRows =
+        requestShapes.stream()
+            .filter(requestShape -> isOrphan(requestShape, rules, excludedShapes, includedShapes))
+            .map(requestShape -> orphanRowOf(requestShape.request()))
             .toList();
 
     int covered =
@@ -120,15 +110,51 @@ public final class CoverageEngine {
         covered,
         endpointRows.size() - covered,
         orphanRows.size(),
-        excludedEndpointList.size(),
+        excludedShapes.size(),
         countCollections(requests));
   }
 
-  private static CoverageRow toRow(ApiEndpoint endpoint, List<ApiRequest> requests) {
-    List<Segment> segments = PathNormalizer.normalize(endpoint.pathTemplate());
+  private static CoverageRow toRow(Shape shape, List<RequestShape> requestShapes) {
     boolean isCovered =
-        requests.stream().anyMatch(request -> covers(request, endpoint.method(), segments));
-    CoverageStatus status = isCovered ? CoverageStatus.COVERED : CoverageStatus.UNCOVERED;
+        requestShapes.stream().anyMatch(requestShape -> covers(shape, requestShape));
+    return rowOf(shape.endpoint(), isCovered ? CoverageStatus.COVERED : CoverageStatus.UNCOVERED);
+  }
+
+  private static boolean isExcludedByRules(Shape shape, List<Rule> rules) {
+    return rules.stream().anyMatch(rule -> matchesStrictly(rule, shape.shape()));
+  }
+
+  private static boolean isOrphan(
+      RequestShape requestShape,
+      List<Rule> rules,
+      List<Shape> excludedShapes,
+      List<Shape> includedShapes) {
+    boolean excludedByRule =
+        rules.stream()
+            .anyMatch(
+                rule ->
+                    requestShape.request().method() == rule.method()
+                        && PathMatcher.matchesStrict(rule.segments(), requestShape.segments()));
+    if (excludedByRule) {
+      return false;
+    }
+    if (excludedShapes.stream().anyMatch(shape -> covers(shape, requestShape))) {
+      return false;
+    }
+    return includedShapes.stream().noneMatch(shape -> covers(shape, requestShape));
+  }
+
+  private static boolean covers(Shape shape, RequestShape requestShape) {
+    return requestShape.request().method() == shape.shape().method()
+        && PathMatcher.matches(shape.shape().segments(), requestShape.segments());
+  }
+
+  private static boolean matchesStrictly(Rule first, Rule second) {
+    return first.method() == second.method()
+        && PathMatcher.matchesStrict(first.segments(), second.segments());
+  }
+
+  private static CoverageRow rowOf(ApiEndpoint endpoint, CoverageStatus status) {
     return new CoverageRow(
         status,
         endpoint.method(),
@@ -138,51 +164,14 @@ public final class CoverageEngine {
         endpoint.psiMethod());
   }
 
-  private static boolean isExcluded(ApiEndpoint endpoint, List<Rule> rules) {
-    Rule shape = new Rule(endpoint.method(), PathNormalizer.normalize(endpoint.pathTemplate()));
-    return rules.stream().anyMatch(rule -> matchesStrictly(rule, shape));
-  }
-
-  private static boolean isOrphan(
-      ApiRequest request,
-      List<Rule> rules,
-      List<Rule> excludedEndpoints,
-      List<ApiEndpoint> includedEndpoints) {
-    List<Segment> segments = PathNormalizer.normalize(request.rawUrl());
-    boolean excludedByRule =
-        rules.stream()
-            .anyMatch(
-                rule ->
-                    request.method() == rule.method()
-                        && PathMatcher.matchesStrict(rule.segments(), segments));
-    if (excludedByRule) {
-      return false;
-    }
-    boolean coversExcludedEndpoint =
-        excludedEndpoints.stream()
-            .anyMatch(
-                rule ->
-                    request.method() == rule.method()
-                        && PathMatcher.matches(rule.segments(), segments));
-    if (coversExcludedEndpoint) {
-      return false;
-    }
-    return includedEndpoints.stream()
-        .noneMatch(
-            endpoint ->
-                covers(
-                    request, endpoint.method(), PathNormalizer.normalize(endpoint.pathTemplate())));
-  }
-
-  private static boolean covers(
-      ApiRequest request, HttpMethod method, List<Segment> endpointSegments) {
-    return request.method() == method
-        && PathMatcher.matches(endpointSegments, PathNormalizer.normalize(request.rawUrl()));
-  }
-
-  private static boolean matchesStrictly(Rule first, Rule second) {
-    return first.method() == second.method()
-        && PathMatcher.matchesStrict(first.segments(), second.segments());
+  private static CoverageRow orphanRowOf(ApiRequest request) {
+    return new CoverageRow(
+        CoverageStatus.ORPHAN,
+        request.method(),
+        request.rawUrl(),
+        request.collectionName(),
+        "",
+        null);
   }
 
   private static int displayRank(CoverageStatus status) {
@@ -199,4 +188,10 @@ public final class CoverageEngine {
   }
 
   private record Rule(HttpMethod method, List<Segment> segments) {}
+
+  /** Endpoint paired with its normalized (method, path) shape, computed once per endpoint. */
+  private record Shape(ApiEndpoint endpoint, Rule shape) {}
+
+  /** Request paired with its normalized path shape, computed once per request. */
+  private record RequestShape(ApiRequest request, List<Segment> segments) {}
 }

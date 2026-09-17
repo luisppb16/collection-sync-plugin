@@ -63,12 +63,12 @@ controlador en el editor; si el origen es `OPEN_API`, abre el documento configur
 
 - **Tools → Analyze Endpoints Coverage**: activa la tool window y lanza un reescaneo en segundo
   plano (equivalente a "Reescanear", disponible sin abrir la tool window).
-- **Clic derecho** (en el Project view o en el editor) sobre un fichero `.json` / `.yaml` /
-  `.yml`:
+- **Clic derecho** (en el Project view o en el editor) sobre un fichero que el IDE reconozca como
+  JSON, YAML o texto plano (la extensión no importa):
     - **Endpoint Coverage: Check Coverage with This Collection**: valida que el fichero es una
-      colección Postman v2.1 / Insomnia v4/v5, la añade a *Collection files* (sin duplicados),
-      reescanea y abre la tool window. Si no es una colección válida, muestra un error y no toca
-      la configuración.
+      colección Postman v2.1 / Insomnia v4/v5 con al menos una petición, la añade a *Collection
+      files* (sin duplicados), reescanea y abre la tool window. Si no es una colección válida (o
+      está vacía), muestra un error y no toca la configuración.
     - **Endpoint Coverage: Use as OpenAPI Source**: valida que el documento contiene un objeto
       `paths`, lo fija como *OpenAPI file path* con source type `OPEN_API`, reescanea y abre la
       tool window. Si el fichero no es un OpenAPI 3.x válido, muestra un error y no toca la

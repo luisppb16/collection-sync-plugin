@@ -19,13 +19,12 @@ import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * "Endpoint Coverage: Use as OpenAPI Source": available on {@code .json}, {@code .yaml} and {@code
- * .yml} files; validates that the file is an OpenAPI 3.x document (an object with {@code paths})
+ * "Endpoint Coverage: Use as OpenAPI Source": available on files the IDE recognizes as JSON, YAML
+ * or plain text; validates that the file is an OpenAPI 3.x document (an object with {@code paths})
  * and, when valid, sets it as the endpoint source and rescans.
  */
 public final class UseAsOpenApiSourceAction extends AnAction {
@@ -56,27 +55,11 @@ public final class UseAsOpenApiSourceAction extends AnAction {
 
   private static void applySource(@NotNull Project project, @NotNull String absolutePath) {
     EndpointCoverageSettings settings = EndpointCoverageSettings.getInstance(project);
-    EndpointCoverageSettings.State updated = stateForUpdate(settings);
+    EndpointCoverageSettings.State updated =
+        EndpointCoverageSettings.copyForUpdate(settings.getState());
     updated.openApiFilePath = absolutePath;
     updated.sourceType = EndpointCoverageSettings.SourceType.OPEN_API.name();
     settings.setState(updated);
-  }
-
-  /**
-   * Copy of the persisted state with mutable lists, mirroring how {@link
-   * com.luisppb16.collectionsync.ui.toolwindow.CoveragePanel} applies updates: the whole state is
-   * replaced so the change is persisted atomically.
-   */
-  private static @NotNull EndpointCoverageSettings.State stateForUpdate(
-      @NotNull EndpointCoverageSettings settings) {
-    EndpointCoverageSettings.State current = settings.getState();
-    EndpointCoverageSettings.State updated = new EndpointCoverageSettings.State();
-    updated.sourceType = current.sourceType;
-    updated.openApiFilePath = current.openApiFilePath;
-    updated.collectionFilePaths = new ArrayList<>(current.collectionFilePaths);
-    updated.exclusions = new ArrayList<>(current.exclusions);
-    updated.autoScanOnProjectOpen = current.autoScanOnProjectOpen;
-    return updated;
   }
 
   /**

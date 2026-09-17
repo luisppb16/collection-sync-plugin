@@ -7,18 +7,19 @@
 
 package com.luisppb16.collectionsync.collection;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import com.luisppb16.collectionsync.domain.model.ApiRequest;
+import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Factory that selects the {@link CollectionParser} matching a collection file.
+ * Factory that selects the {@link CollectionParser} matching a collection file, plus a one-shot
+ * parse entry point.
  *
  * <p>The format is decided from the parsed content alone (JSON is tried first, with a YAML
  * fallback, so the file extension never matters): an object with {@code info} and {@code item} is a
@@ -27,15 +28,32 @@ import org.jetbrains.annotations.NotNull;
  * a bare resource array) is an Insomnia v4/v5 export. Anything else fails fast with an {@link
  * IllegalArgumentException}; content that does not even parse fails with an {@link IOException}.
  *
- * <p>Note that {@link #forFile(File)} only inspects the content to choose the parser; the returned
- * parser reads the file again when {@link CollectionParser#parse(File)} is invoked.
+ * <p>{@link #parse(File)} reads the file once and hands the already-parsed tree to the matching
+ * parser; {@link #forFile(File)} + {@link CollectionParser#parse(File)} is the composable variant
+ * that reads the file twice (once to select the parser, once to parse it), which is fine when the
+ * parser instance is kept and reused.
  */
 public final class CollectionParsers {
 
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-  private static final ObjectMapper YAML_MAPPER = new YAMLMapper();
-
   private CollectionParsers() {}
+
+  /**
+   * Parses the given collection file in a single read: the content decides the format and the
+   * matching parser interprets the already-parsed tree.
+   *
+   * @param file collection file to parse; must not be null
+   * @return the collected requests; never null, possibly empty
+   * @throws IOException if the file cannot be read or parses neither as JSON nor as YAML
+   * @throws IllegalArgumentException if the parsed content follows neither collection format
+   */
+  public static @NotNull List<ApiRequest> parse(@NotNull File file) throws IOException {
+    Objects.requireNonNull(file, "file must not be null");
+    JsonNode root = JsonYaml.readTree(file);
+    return switch (formatOf(root)) {
+      case POSTMAN -> new PostmanCollectionParser().parseRoot(root, file);
+      case INSOMNIA -> new InsomniaCollectionParser().parseRoot(root, file);
+    };
+  }
 
   /**
    * Creates the parser for the given collection file.
@@ -63,7 +81,7 @@ public final class CollectionParsers {
    * @throws IllegalArgumentException if the parsed content follows neither collection format
    */
   static Format detectFormat(String content) throws IOException {
-    return formatOf(parseJsonOrYaml(content));
+    return formatOf(JsonYaml.parse(content));
   }
 
   /**
@@ -76,18 +94,6 @@ public final class CollectionParsers {
     Objects.requireNonNull(fileName, "fileName must not be null");
     int dot = fileName.lastIndexOf('.');
     return dot <= 0 ? fileName : fileName.substring(0, dot);
-  }
-
-  private static JsonNode parseJsonOrYaml(String content) throws IOException {
-    try {
-      return JSON_MAPPER.readTree(content);
-    } catch (JsonProcessingException jsonError) {
-      try {
-        return YAML_MAPPER.readTree(content);
-      } catch (JsonProcessingException yamlError) {
-        throw new IOException("Collection file is neither valid JSON nor valid YAML", jsonError);
-      }
-    }
   }
 
   private static Format formatOf(JsonNode root) {
@@ -104,12 +110,12 @@ public final class CollectionParsers {
     }
     throw new IllegalArgumentException(
         "Unsupported collection format: expected a Postman v2.1 collection ('info' and 'item') "
-            + "or an Insomnia v4/v5 export ('resources' or a 'collection.insomnia.rest/5.0' type)");
+            + "or an Insomnia v4/v5 export ('resources' or a 'collection.insomnia.rest/5.x' type)");
   }
 
   /** Collection formats supported by the factory. */
   enum Format {
-    /** Postman v2.1: a JSON object with {@code info} and {@code item}. */
+    /** Postman v2.1: an object with {@code info} and {@code item}. */
     POSTMAN,
     /**
      * Insomnia v4/v5: an object with {@code resources}, a bare resource array, or a v5 collection.

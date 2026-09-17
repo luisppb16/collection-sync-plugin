@@ -8,12 +8,10 @@
 package com.luisppb16.collectionsync.actions;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import org.jetbrains.annotations.NotNull;
@@ -25,38 +23,26 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class ActionFiles {
 
-  private static final Set<String> SUPPORTED_EXTENSIONS = Set.of("json", "yaml", "yml");
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
-  private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+  /**
+   * Platform file type names under which a collection or OpenAPI document may be edited, matched
+   * against {@link VirtualFile#getFileType()} so the accepted files follow what the IDE shows for
+   * them instead of a hard-coded extension list: {@code JSON}, {@code YAML} and any text file the
+   * IDE has no dedicated type for (e.g. a collection kept in {@code .http} style files or without
+   * an extension).
+   */
+  private static final Set<String> SUPPORTED_FILE_TYPE_NAMES = Set.of("JSON", "YAML", "PLAIN_TEXT");
 
   private ActionFiles() {}
 
   /**
-   * Reports whether the given file can be used as a collection or OpenAPI source, i.e. it has a
-   * {@code .json}, {@code .yaml} or {@code .yml} extension.
+   * Reports whether the given file can be used as a collection or OpenAPI source, i.e. the IDE
+   * recognizes it as JSON, YAML or plain text.
    *
    * @param file selected file; may be null (e.g. no file under the popup)
-   * @return true when the file name has a supported extension
+   * @return true when the file type is JSON, YAML or plain text
    */
   public static boolean isSupportedFile(@Nullable VirtualFile file) {
-    return file != null && isSupportedFile(file.getName());
-  }
-
-  /**
-   * Pure predicate behind {@link #isSupportedFile(VirtualFile)}; the extension is matched
-   * case-insensitively on the file name.
-   *
-   * @param fileName file name; may be null
-   * @return true when the name ends (last extension) in {@code .json}, {@code .yaml} or {@code
-   *     .yml}, in any case
-   */
-  public static boolean isSupportedFile(@Nullable String fileName) {
-    if (fileName == null) {
-      return false;
-    }
-    int dot = fileName.lastIndexOf('.');
-    return dot >= 0
-        && SUPPORTED_EXTENSIONS.contains(fileName.substring(dot + 1).toLowerCase(Locale.ROOT));
+    return file != null && SUPPORTED_FILE_TYPE_NAMES.contains(file.getFileType().getName());
   }
 
   /**
@@ -72,10 +58,9 @@ public final class ActionFiles {
   }
 
   /**
-   * Reads an OpenAPI document as a Jackson tree, using the same format criterion as {@link
-   * com.luisppb16.collectionsync.source.OpenApiEndpointSource}: {@code .yaml}/{@code .yml} files
-   * are parsed as YAML, and any other file is first parsed as JSON and, when that fails, retried as
-   * YAML.
+   * Reads an OpenAPI document as a Jackson tree with the same content-based criterion as {@link
+   * com.luisppb16.collectionsync.collection.CollectionParsers}: JSON first, YAML fallback, whatever
+   * the file extension says.
    *
    * @param openApiFile document to read; must not be null
    * @return the parsed root node; never null
@@ -83,18 +68,6 @@ public final class ActionFiles {
    */
   public static @NotNull JsonNode readOpenApiTree(@NotNull File openApiFile) throws IOException {
     Objects.requireNonNull(openApiFile, "openApiFile must not be null");
-    if (isYaml(openApiFile.getName())) {
-      return YAML_MAPPER.readTree(openApiFile);
-    }
-    try {
-      return JSON_MAPPER.readTree(openApiFile);
-    } catch (IOException jsonFailure) {
-      return YAML_MAPPER.readTree(openApiFile);
-    }
-  }
-
-  private static boolean isYaml(@NotNull String fileName) {
-    String lowerCaseName = fileName.toLowerCase(Locale.ROOT);
-    return lowerCaseName.endsWith(".yaml") || lowerCaseName.endsWith(".yml");
+    return JsonYaml.readTree(openApiFile);
   }
 }

@@ -114,7 +114,15 @@ public final class CoverageService {
       return List.of();
     }
     try {
-      return CollectionParsers.forFile(collectionFile).parse(collectionFile);
+      List<ApiRequest> requests = CollectionParsers.parse(collectionFile);
+      if (requests.isEmpty()) {
+        // A collection that parses but holds no requests would silently lower the coverage
+        // baseline; surfaced as an error so the user can fix or remove the file.
+        errors.add(
+            EndpointCoverageBundle.message(
+                "service.error.collection.empty", collectionFile.getName()));
+      }
+      return requests;
     } catch (IOException | IllegalArgumentException brokenFile) {
       errors.add(
           EndpointCoverageBundle.message(

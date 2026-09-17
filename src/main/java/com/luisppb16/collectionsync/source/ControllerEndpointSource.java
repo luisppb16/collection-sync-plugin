@@ -175,7 +175,7 @@ public final class ControllerEndpointSource implements EndpointSource {
     // (and retries if indexing restarts mid-scan) instead of failing with
     // IndexNotReadyException. This is the non-deprecated equivalent of the old
     // DumbService.runReadActionInSmartMode, which is deprecated in the 2026.2 platform.
-    return ReadAction.nonBlocking((Callable<List<ApiEndpoint>>) () -> collectModules(project))
+    return ReadAction.nonBlocking(() -> collectModules(project))
         .inSmartMode(project)
         .executeSynchronously();
   }

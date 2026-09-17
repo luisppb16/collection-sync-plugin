@@ -9,9 +9,13 @@ package com.luisppb16.collectionsync.actions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIOException;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.intellij.openapi.fileTypes.FileType;
+import com.intellij.openapi.vfs.VirtualFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("ActionFiles")
@@ -29,36 +32,32 @@ class ActionFilesTest {
 
   // ------------------------------------------------------------------ isSupportedFile
 
-  @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "collection.json",
-        "collection.yaml",
-        "collection.yml",
-        "COLLECTION.JSON",
-        "open-api.Yml",
-        "api.spec.yaml"
-      })
-  @DisplayName("Given a file name with a supported extension, when checked, then it is accepted")
-  void acceptsSupportedExtension(String fileName) {
-    assertThat(ActionFiles.isSupportedFile(fileName)).isTrue();
+  private static VirtualFile fileOfType(String fileTypeName) {
+    FileType fileType = mock(FileType.class);
+    when(fileType.getName()).thenReturn(fileTypeName);
+    VirtualFile virtualFile = mock(VirtualFile.class);
+    when(virtualFile.getFileType()).thenReturn(fileType);
+    return virtualFile;
   }
 
   @ParameterizedTest
-  @NullSource
-  @ValueSource(
-      strings = {
-        "",
-        "collection",
-        "archive.zip",
-        "notes.json.txt",
-        ".gitignore",
-        "collection.postman_collection"
-      })
-  @DisplayName(
-      "Given a name with no extension, another extension or null, when checked, then it is rejected")
-  void rejectsUnsupportedNames(String fileName) {
-    assertThat(ActionFiles.isSupportedFile(fileName)).isFalse();
+  @ValueSource(strings = {"JSON", "YAML", "PLAIN_TEXT"})
+  @DisplayName("Given a file of a JSON, YAML or plain-text type, when checked, then it is accepted")
+  void acceptsSupportedFileTypes(String fileTypeName) {
+    assertThat(ActionFiles.isSupportedFile(fileOfType(fileTypeName))).isTrue();
+  }
+
+  @Test
+  @DisplayName("Given no file under the popup, when checked, then it is rejected")
+  void rejectsNullFile() {
+    assertThat(ActionFiles.isSupportedFile(null)).isFalse();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"UNKNOWN", "ZIP", "HTTP Request"})
+  @DisplayName("Given a file of any other type, when checked, then it is rejected")
+  void rejectsUnsupportedFileTypes(String fileTypeName) {
+    assertThat(ActionFiles.isSupportedFile(fileOfType(fileTypeName))).isFalse();
   }
 
   // ------------------------------------------------------------------ isOpenApiDocument

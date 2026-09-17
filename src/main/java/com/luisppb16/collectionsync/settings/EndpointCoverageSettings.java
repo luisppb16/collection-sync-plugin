@@ -65,6 +65,26 @@ public final class EndpointCoverageSettings
         && first.autoScanOnProjectOpen == second.autoScanOnProjectOpen;
   }
 
+  /**
+   * Returns a mutable copy of the given state, to edit and store back through {@link
+   * #setState(State)}: the whole state is replaced so every change is persisted atomically. Shared
+   * by every writer (settings UI, tool window, context menu actions) so a new state field is copied
+   * in exactly one place.
+   *
+   * @param current state to copy; must not be null
+   * @return the editable copy; never null
+   */
+  public static @NotNull State copyForUpdate(@NotNull State current) {
+    Objects.requireNonNull(current, "current must not be null");
+    State updated = new State();
+    updated.sourceType = current.sourceType;
+    updated.openApiFilePath = current.openApiFilePath;
+    updated.collectionFilePaths = new ArrayList<>(current.collectionFilePaths);
+    updated.exclusions = new ArrayList<>(current.exclusions);
+    updated.autoScanOnProjectOpen = current.autoScanOnProjectOpen;
+    return updated;
+  }
+
   private static Optional<ExclusionRule> toRule(ExclusionEntry entry) {
     if (entry == null || isBlank(entry.getMethod()) || isBlank(entry.getPathPattern())) {
       return Optional.empty();

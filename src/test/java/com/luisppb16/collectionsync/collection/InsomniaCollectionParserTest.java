@@ -24,6 +24,8 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("InsomniaCollectionParser")
 class InsomniaCollectionParserTest {
@@ -222,6 +224,35 @@ class InsomniaCollectionParserTest {
 
   @Test
   @DisplayName(
+      "Given a v5 request that also carries children, when it is parsed, then the request and its nested requests are collected")
+  void parsesV5RequestWithChildren() throws IOException {
+    File file =
+        writeFile(
+            "request-with-children.yaml",
+            """
+                type: "collection.insomnia.rest/5.0"
+                name: "Nested Request"
+                collection:
+                  - name: "Parent"
+                    method: GET
+                    url: /parent
+                    children:
+                      - name: "Child"
+                        method: POST
+                        url: /parent/child
+                """);
+
+    List<ApiRequest> requests = PARSER.parse(file);
+
+    assertThat(requests)
+        .extracting(ApiRequest::name, ApiRequest::method, ApiRequest::rawUrl)
+        .containsExactly(
+            tuple("Parent", HttpMethod.GET, "/parent"),
+            tuple("Child", HttpMethod.POST, "/parent/child"));
+  }
+
+  @Test
+  @DisplayName(
       "Given an Insomnia v5 collection written as JSON, when it is parsed, then requests are collected with the root name")
   void parsesV5JsonExport() throws IOException {
     File file =
@@ -273,6 +304,56 @@ class InsomniaCollectionParserTest {
                 """);
 
     assertThat(PARSER.parse(file)).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection whose requests are shared through YAML aliases and merge keys, when it is parsed, then the aliased requests are expanded and collected")
+  void expandsYamlAliasesAndMergeKeys() throws IOException {
+    File file =
+        writeFile(
+            "aliased.yaml",
+            """
+                resources:
+                  - &ping
+                    _type: request
+                    name: Ping
+                    method: GET
+                    url: /ping
+                  - *ping
+                  - <<: *ping
+                    name: Merged
+                """);
+
+    List<ApiRequest> requests = PARSER.parse(file);
+
+    assertThat(requests)
+        .extracting(ApiRequest::name, ApiRequest::method, ApiRequest::rawUrl)
+        .containsExactly(
+            tuple("Ping", HttpMethod.GET, "/ping"),
+            tuple("Ping", HttpMethod.GET, "/ping"),
+            tuple("Merged", HttpMethod.GET, "/ping"));
+  }
+
+  @ParameterizedTest(name = "\"{0}\"")
+  @ValueSource(strings = {"method: no", "url: on"})
+  @DisplayName(
+      "Given a request whose method or url is coerced to a boolean by YAML 1.1, when it is parsed, then it fails fast")
+  void failsFastOnYamlCoercedMethodOrUrl(String brokenField) throws IOException {
+    String content =
+        """
+            resources:
+              - _type: request
+                name: Weird
+                %s
+                %s
+            """
+            .formatted(
+                brokenField.startsWith("method") ? brokenField : "method: GET",
+                brokenField.startsWith("url") ? brokenField : "url: /ping");
+    File file = writeFile("coerced.yaml", content);
+
+    assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }
 
   @Test

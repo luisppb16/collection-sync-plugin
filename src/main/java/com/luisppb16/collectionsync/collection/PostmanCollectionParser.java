@@ -8,11 +8,11 @@
 package com.luisppb16.collectionsync.collection;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -23,7 +23,9 @@ import java.util.stream.StreamSupport;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Parses a Postman v2.1 collection (JSON) into {@link ApiRequest}s using the Jackson tree model.
+ * Parses a Postman v2.1 collection (JSON, or its YAML superset) into {@link ApiRequest}s using the
+ * Jackson tree model, read through {@link JsonYaml} (content-based, so the file extension never
+ * matters).
  *
  * <p>The expected shape is a root object with an {@code info} object (whose {@code name} becomes
  * the collection name, falling back to the file name without extension when absent) and an {@code
@@ -39,13 +41,12 @@ import org.jetbrains.annotations.NotNull;
  * </ul>
  *
  * <p>Entries with neither {@code request} nor {@code item} are ignored, as are requests without a
- * usable method or URL. A request whose method is not a supported HTTP method fails fast with an
- * {@link IllegalArgumentException}, as does a root that is not an object with {@code info} and
- * {@code item}.
+ * usable method or URL. A {@code method} that is present but not text (e.g. a YAML 1.1 value like
+ * {@code no} or {@code on}, which parses as a boolean) fails fast with an {@link
+ * IllegalArgumentException}, as do an unsupported HTTP method and a root that is not an object with
+ * {@code info} and {@code item}.
  */
 public final class PostmanCollectionParser implements CollectionParser {
-
-  private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
   private static String collectionName(JsonNode info, File file) {
     return Optional.ofNullable(info.path("name").asText(null))
@@ -70,7 +71,12 @@ public final class PostmanCollectionParser implements CollectionParser {
 
   private static ApiRequest toRequest(JsonNode item, String collectionName) {
     JsonNode requestNode = item.get("request");
-    String method = requestNode.path("method").asText("").strip();
+    JsonNode methodNode = requestNode.path("method");
+    if (!methodNode.isMissingNode() && !methodNode.isTextual()) {
+      throw new IllegalArgumentException(
+          "Request 'method' must be a text value: " + item.path("name").asText(""));
+    }
+    String method = methodNode.asText("").strip();
     String rawUrl = rawUrl(requestNode.get("url"));
     if (method.isEmpty() || rawUrl.isEmpty()) {
       return null;
@@ -101,7 +107,18 @@ public final class PostmanCollectionParser implements CollectionParser {
   @NotNull
   public List<ApiRequest> parse(@NotNull File file) throws IOException {
     Objects.requireNonNull(file, "file must not be null");
-    JsonNode root = JSON_MAPPER.readTree(file);
+    return parseRoot(JsonYaml.readTree(file), file);
+  }
+
+  /**
+   * Parses an already-read root tree; shared with {@link CollectionParsers#parse(File)} so a file
+   * is only read once on the scan path.
+   *
+   * @param root parsed document root; must not be null
+   * @param file file the root was read from; must not be null
+   * @return the collected requests; never null, possibly empty
+   */
+  List<ApiRequest> parseRoot(@NotNull JsonNode root, @NotNull File file) {
     if (root == null || !root.isObject() || !root.hasNonNull("info") || !root.hasNonNull("item")) {
       throw new IllegalArgumentException(
           "Not a Postman v2.1 collection: root object must contain 'info' and 'item': " + file);
