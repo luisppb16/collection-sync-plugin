@@ -1,0 +1,33 @@
+type: "collection.insomnia.rest/5.0"
+name: "Users API v5"
+meta:
+  id: "coll_5f4c3b2a111122223333444455556666"
+  description: "Users API collection"
+collection:
+  - name: "Users"
+    meta:
+      id: "fld_users000000000000000000000000000"
+    children:
+      - name: "List users"
+        method: GET
+        url: "{{ _.base_url }}/users?include=roles"
+        headers: [ ]
+      - name: "Create user"
+        method: POST
+        url: "{{ _.base_url }}/users"
+        headers:
+          - name: X-Auth
+            value: "{{ _.token }}"
+            disabled: false
+        body:
+          mimeType: "application/json"
+          text: '{"name": "Ada", "email": "ada@example.com"}'
+  - name: "Delete user"
+    method: DELETE
+    url: "{{ _.base_url }}/users/17"
+  - name: "Broken request"
+    method: GET
+environments:
+  name: "Base Environment"
+  data:
+    base_url: "https://api.example.com"

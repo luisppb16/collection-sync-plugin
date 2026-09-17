@@ -21,8 +21,8 @@ import org.jetbrains.annotations.NotNull;
  * <p>The model exposes the {@link CoverageRow} of every model index through {@link #rowAt(int)}, so
  * renderers, filters and actions work with the domain object instead of re-parsing cells. Excluded
  * rows are loaded by the panel together with the regular ones; the status filter decides whether
- * they are visible. Column names come from the resource bundle, resolved on each
- * {@link #getColumnName(int)} call.
+ * they are visible. Column names come from the resource bundle, resolved on each {@link
+ * #getColumnName(int)} call.
  */
 public final class CoverageTableModel extends AbstractTableModel {
 

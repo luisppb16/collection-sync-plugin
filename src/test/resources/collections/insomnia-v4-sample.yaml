@@ -19,7 +19,7 @@ resources:
     name: List users
     method: GET
     url: "{{ _.base_url }}/users?include=roles"
-    headers: []
+    headers: [ ]
     parameters:
       - name: include
         value: roles

@@ -1,8 +1,8 @@
 # CollectionSync — Endpoint Coverage Tracker
 
 Plugin de IntelliJ IDEA que compara los **endpoints REST reales** de tu proyecto Java (documento
-OpenAPI 3.x o controladores Spring MVC / JAX-RS/Quarkus) contra las peticiones de tus
-**colecciones Postman (v2.1) e Insomnia (v4)**, y te dice, endpoint a endpoint, qué está cubierto,
+OpenAPI 3.x o controladores Spring MVC / JAX-RS/Quarkus) contra las peticiones de tus **colecciones Postman (v2.1) e
+Insomnia (v4/v5)**, y te dice, endpoint a endpoint, qué está cubierto,
 qué falta y qué peticiones se han quedado huérfanas.
 
 ## Qué hace
@@ -10,8 +10,9 @@ qué falta y qué peticiones se han quedado huérfanas.
 - **Descubre endpoints**: escanea controladores Spring (`@RestController`, `@RequestMapping`…) y
   JAX-RS/Quarkus (`@Path`, `@GET`…), o lee un documento OpenAPI 3.x local, para construir la lista
   de endpoints del proyecto.
-- **Lee colecciones**: parsea colecciones Postman v2.1 o Insomnia v4 (JSON y YAML). Un fichero
-  roto no aborta el informe: se registra el error y el resto sigue contribuyendo.
+- **Lee colecciones**: parsea colecciones Postman v2.1 o Insomnia v4/v5 (JSON y YAML, incluido el
+  formato anidado v5). Un fichero roto no aborta el informe: se registra el error y el resto
+  sigue contribuyendo.
 - **Calcula cobertura**: clasifica cada endpoint como `COVERED`, `UNCOVERED`, `ORPHAN` o
   `EXCLUDED` mediante matching estructural de paths (las variables casan por posición; el modo
   estricto mantiene separados `/users/{id}` y `/users/me`).
@@ -26,8 +27,8 @@ qué falta y qué peticiones se han quedado huérfanas.
 
 - **Escanear cobertura al abrir el proyecto**: activado por defecto (`true`); la primera vez que se
   abre la tool window en el proyecto se lanza un escaneo automático. Al desactivarlo, la tool
-  window arranca en su estado vacío y solo los reescaneos manuales (botón *Reescanear*, menú
-  *Tools*, clic derecho) recalculan la cobertura.
+  window arranca en su estado vacío y solo los reescaneos manuales (botón *Reescanear*, menú *Tools*, clic derecho)
+  recalculan la cobertura.
 - **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS) o `OPEN_API` (documento local).
 - **OpenAPI file path**: ruta del documento OpenAPI 3.x (solo si el origen es `OPEN_API`).
 - **Collection files**: ficheros de colección Postman/Insomnia a comparar (añádelos aquí o desde
@@ -41,8 +42,8 @@ Anclada a la derecha, disponible en proyectos con módulos Java:
 - **Reescanear**: recalcula la cobertura en segundo plano.
 - **Seleccionar colecciones…**: añade ficheros de colección al listado y reescanea.
 - **Exportar informe**: guarda el informe actual en Markdown (`.md`) o CSV (`.csv`).
-- **Filtros**: campo de texto (path/owner/module, insensible a mayúsculas) y combo de estado
-  (All / Covered / Uncovered / Orphan / Excluded). La tabla ordena por cualquier columna.
+- **Filtros**: campo de texto (path/owner/module, insensible a mayúsculas) y combo de estado (All / Covered /
+  Uncovered / Orphan / Excluded). La tabla ordena por cualquier columna.
 - **Resumen**: `X covered · Y uncovered · Z orphan · W excluded · N collections`.
 
 ### 3. Navegación
@@ -64,14 +65,14 @@ controlador en el editor; si el origen es `OPEN_API`, abre el documento configur
   plano (equivalente a "Reescanear", disponible sin abrir la tool window).
 - **Clic derecho** (en el Project view o en el editor) sobre un fichero `.json` / `.yaml` /
   `.yml`:
-  - **Endpoint Coverage: Check Coverage with This Collection**: valida que el fichero es una
-    colección Postman v2.1 / Insomnia v4, la añade a *Collection files* (sin duplicados),
-    reescanea y abre la tool window. Si no es una colección válida, muestra un error y no toca
-    la configuración.
-  - **Endpoint Coverage: Use as OpenAPI Source**: valida que el documento contiene un objeto
-    `paths`, lo fija como *OpenAPI file path* con source type `OPEN_API`, reescanea y abre la
-    tool window. Si el fichero no es un OpenAPI 3.x válido, muestra un error y no toca la
-    configuración.
+    - **Endpoint Coverage: Check Coverage with This Collection**: valida que el fichero es una
+      colección Postman v2.1 / Insomnia v4/v5, la añade a *Collection files* (sin duplicados),
+      reescanea y abre la tool window. Si no es una colección válida, muestra un error y no toca
+      la configuración.
+    - **Endpoint Coverage: Use as OpenAPI Source**: valida que el documento contiene un objeto
+      `paths`, lo fija como *OpenAPI file path* con source type `OPEN_API`, reescanea y abre la
+      tool window. Si el fichero no es un OpenAPI 3.x válido, muestra un error y no toca la
+      configuración.
 
 ## Construcción y prueba
 

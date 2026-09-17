@@ -9,20 +9,18 @@ package com.luisppb16.collectionsync.coverage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.luisppb16.collectionsync.domain.model.CoverageResult;
+import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
+import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
+import com.luisppb16.collectionsync.test.PsiTestCase;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import com.luisppb16.collectionsync.domain.model.CoverageResult;
-import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
-import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
-import com.luisppb16.collectionsync.test.PsiTestCase;
 
 @DisplayName("CoverageService.scan")
 class CoverageServiceScanTest extends PsiTestCase {
@@ -73,15 +71,15 @@ class CoverageServiceScanTest extends PsiTestCase {
   }
 
   /**
-   * Unit-level coverage of the dumb-mode dedup. Only the extracted pure method
-   * {@link CoverageService#tryScheduleOnce(AtomicBoolean)} is exercised here; the rest of the
-   * defer flow is deliberately not unit-tested because it depends on platform services of the
-   * running project: the "indexes building" notification ({@code NotificationGroupManager}), the
-   * {@code DumbService.runWhenSmart} registration (including the "latest callback wins" overwrite
-   * of the pending callback) and the re-entrant {@code scanAsync} call that re-defers when a new
-   * dumb cycle starts at the callback moment. Driving all of that would need an integration test
-   * that toggles real dumb mode in the fixture; the registration behaviour itself is guarded by
-   * the pure dedupe and the EDT-only contract documented in {@code CoverageService#scanAsync}.
+   * Unit-level coverage of the dumb-mode dedup. Only the extracted pure method {@link
+   * CoverageService#tryScheduleOnce(AtomicBoolean)} is exercised here; the rest of the defer flow
+   * is deliberately not unit-tested because it depends on platform services of the running project:
+   * the "indexes building" notification ({@code NotificationGroupManager}), the {@code
+   * DumbService.runWhenSmart} registration (including the "latest callback wins" overwrite of the
+   * pending callback) and the re-entrant {@code scanAsync} call that re-defers when a new dumb
+   * cycle starts at the callback moment. Driving all of that would need an integration test that
+   * toggles real dumb mode in the fixture; the registration behaviour itself is guarded by the pure
+   * dedupe and the EDT-only contract documented in {@code CoverageService#scanAsync}.
    */
   @Test
   @DisplayName(
@@ -91,7 +89,8 @@ class CoverageServiceScanTest extends PsiTestCase {
     AtomicBoolean scheduled = new AtomicBoolean(false);
 
     assertThat(CoverageService.tryScheduleOnce(scheduled))
-        .as("the first request while dumb registers the deferred scan").isTrue();
+        .as("the first request while dumb registers the deferred scan")
+        .isTrue();
     assertThat(CoverageService.tryScheduleOnce(scheduled))
         .as("further requests while dumb must not pile up duplicate runWhenSmart callbacks")
         .isFalse();
@@ -99,8 +98,10 @@ class CoverageServiceScanTest extends PsiTestCase {
     scheduled.set(false);
 
     assertThat(CoverageService.tryScheduleOnce(scheduled))
-        .as("the flag is cleared when the deferred scan runs, so a later dumb-mode cycle "
-            + "can register again").isTrue();
+        .as(
+            "the flag is cleared when the deferred scan runs, so a later dumb-mode cycle "
+                + "can register again")
+        .isTrue();
   }
 
   private Path write(String fileName, String content) throws IOException {

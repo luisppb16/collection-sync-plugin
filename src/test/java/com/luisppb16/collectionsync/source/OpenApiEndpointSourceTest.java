@@ -11,11 +11,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 
+import com.intellij.openapi.project.Project;
+import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
+import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,15 +25,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import com.intellij.openapi.project.Project;
-
-import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
-import com.luisppb16.collectionsync.domain.model.HttpMethod;
-
 @DisplayName("OpenApiEndpointSource")
 class OpenApiEndpointSourceTest {
 
-    private static final String JSON_SPEC = """
+  private static final String JSON_SPEC =
+      """
             {
               "openapi": "3.0.3",
               "info": {"title": "Demo API", "version": "1.0.0"},
@@ -58,7 +56,8 @@ class OpenApiEndpointSourceTest {
             }
             """;
 
-    private static final String YAML_SPEC = """
+  private static final String YAML_SPEC =
+      """
             openapi: 3.1.0
             info:
               title: Demo API
@@ -76,97 +75,107 @@ class OpenApiEndpointSourceTest {
                   operationId: userOptions
             """;
 
-    private final Project project = mock(Project.class);
+  private final Project project = mock(Project.class);
 
-    @TempDir
-    Path tempDir;
+  @TempDir Path tempDir;
 
-    @Test
-    @DisplayName("Given an OpenAPI 3.x JSON document, when it is collected, then every operation becomes an endpoint")
-    void extractsEndpointsFromJsonDocument() throws IOException {
-        Path specFile = write("openapi.json", JSON_SPEC);
-        OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
+  @Test
+  @DisplayName(
+      "Given an OpenAPI 3.x JSON document, when it is collected, then every operation becomes an endpoint")
+  void extractsEndpointsFromJsonDocument() throws IOException {
+    Path specFile = write("openapi.json", JSON_SPEC);
+    OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate).containsExactlyInAnyOrder(
-                tuple(HttpMethod.GET, "/users"),
-                tuple(HttpMethod.POST, "/users"),
-                tuple(HttpMethod.GET, "/users/{id}"),
-                tuple(HttpMethod.DELETE, "/users/{id}"),
-                tuple(HttpMethod.PATCH, "/users/{id}"));
-        assertThat(endpoints).allSatisfy(endpoint -> {
-            assertThat(endpoint.ownerClass()).isEqualTo("<openapi> openapi.json");
-            assertThat(endpoint.moduleName()).isEmpty();
-            assertThat(endpoint.psiMethod()).isNull();
-        });
-    }
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .containsExactlyInAnyOrder(
+            tuple(HttpMethod.GET, "/users"),
+            tuple(HttpMethod.POST, "/users"),
+            tuple(HttpMethod.GET, "/users/{id}"),
+            tuple(HttpMethod.DELETE, "/users/{id}"),
+            tuple(HttpMethod.PATCH, "/users/{id}"));
+    assertThat(endpoints)
+        .allSatisfy(
+            endpoint -> {
+              assertThat(endpoint.ownerClass()).isEqualTo("<openapi> openapi.json");
+              assertThat(endpoint.moduleName()).isEmpty();
+              assertThat(endpoint.psiMethod()).isNull();
+            });
+  }
 
-    @Test
-    @DisplayName("Given an OpenAPI 3.x YAML document, when it is collected, then every operation becomes an endpoint")
-    void extractsEndpointsFromYamlDocument() throws IOException {
-        Path specFile = write("openapi.yaml", YAML_SPEC);
-        OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
+  @Test
+  @DisplayName(
+      "Given an OpenAPI 3.x YAML document, when it is collected, then every operation becomes an endpoint")
+  void extractsEndpointsFromYamlDocument() throws IOException {
+    Path specFile = write("openapi.yaml", YAML_SPEC);
+    OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate).containsExactlyInAnyOrder(
-                tuple(HttpMethod.GET, "/health"),
-                tuple(HttpMethod.HEAD, "/health"),
-                tuple(HttpMethod.PUT, "/users/{id}"),
-                tuple(HttpMethod.OPTIONS, "/users/{id}"));
-    }
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .containsExactlyInAnyOrder(
+            tuple(HttpMethod.GET, "/health"),
+            tuple(HttpMethod.HEAD, "/health"),
+            tuple(HttpMethod.PUT, "/users/{id}"),
+            tuple(HttpMethod.OPTIONS, "/users/{id}"));
+  }
 
-    @ParameterizedTest(name = "extension-less file written as {0}")
-    @ValueSource(strings = {"json", "yaml"})
-    @DisplayName("Given a file with an unknown extension, when it is collected, then the content is detected as JSON or YAML")
-    void detectsFormatByContentWhenExtensionIsUnknown(String format) throws IOException {
-        Path specFile = write("spec.txt", "json".equals(format) ? JSON_SPEC : YAML_SPEC);
-        OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
+  @ParameterizedTest(name = "extension-less file written as {0}")
+  @ValueSource(strings = {"json", "yaml"})
+  @DisplayName(
+      "Given a file with an unknown extension, when it is collected, then the content is detected as JSON or YAML")
+  void detectsFormatByContentWhenExtensionIsUnknown(String format) throws IOException {
+    Path specFile = write("spec.txt", "json".equals(format) ? JSON_SPEC : YAML_SPEC);
+    OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).isNotEmpty();
-        assertThat(endpoints.getFirst().ownerClass()).isEqualTo("<openapi> spec.txt");
-    }
+    assertThat(endpoints).isNotEmpty();
+    assertThat(endpoints.getFirst().ownerClass()).isEqualTo("<openapi> spec.txt");
+  }
 
-    @Test
-    @DisplayName("Given a path that does not exist, when it is collected, then no endpoint is produced")
-    void returnsEmptyWhenFileDoesNotExist() {
-        OpenApiEndpointSource source =
-                new OpenApiEndpointSource(tempDir.resolve("missing-openapi.json").toString());
+  @Test
+  @DisplayName(
+      "Given a path that does not exist, when it is collected, then no endpoint is produced")
+  void returnsEmptyWhenFileDoesNotExist() {
+    OpenApiEndpointSource source =
+        new OpenApiEndpointSource(tempDir.resolve("missing-openapi.json").toString());
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).isEmpty();
-    }
+    assertThat(endpoints).isEmpty();
+  }
 
-    @ParameterizedTest(name = "path [{0}] yields no endpoints")
-    @NullAndEmptySource
-    @ValueSource(strings = {"   "})
-    @DisplayName("Given a null, empty or blank configured path, when it is collected, then no endpoint is produced")
-    void returnsEmptyWhenPathIsNullOrBlank(String configuredPath) {
-        OpenApiEndpointSource source = new OpenApiEndpointSource(configuredPath);
+  @ParameterizedTest(name = "path [{0}] yields no endpoints")
+  @NullAndEmptySource
+  @ValueSource(strings = {"   "})
+  @DisplayName(
+      "Given a null, empty or blank configured path, when it is collected, then no endpoint is produced")
+  void returnsEmptyWhenPathIsNullOrBlank(String configuredPath) {
+    OpenApiEndpointSource source = new OpenApiEndpointSource(configuredPath);
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).isEmpty();
-    }
+    assertThat(endpoints).isEmpty();
+  }
 
-    @Test
-    @DisplayName("Given an unparseable document, when it is collected, then no endpoint is produced")
-    void returnsEmptyWhenDocumentIsUnparseable() throws IOException {
-        Path specFile = write("broken.json", "{ this is not a document ]");
-        OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
+  @Test
+  @DisplayName("Given an unparseable document, when it is collected, then no endpoint is produced")
+  void returnsEmptyWhenDocumentIsUnparseable() throws IOException {
+    Path specFile = write("broken.json", "{ this is not a document ]");
+    OpenApiEndpointSource source = new OpenApiEndpointSource(specFile.toString());
 
-        List<ApiEndpoint> endpoints = source.collect(project);
+    List<ApiEndpoint> endpoints = source.collect(project);
 
-        assertThat(endpoints).isEmpty();
-    }
+    assertThat(endpoints).isEmpty();
+  }
 
-    private Path write(String fileName, String content) throws IOException {
-        Path file = tempDir.resolve(fileName);
-        Files.writeString(file, content);
-        return file;
-    }
+  private Path write(String fileName, String content) throws IOException {
+    Path file = tempDir.resolve(fileName);
+    Files.writeString(file, content);
+    return file;
+  }
 }

@@ -164,11 +164,11 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 EndpointCoverageBundle.message("settings.source.type.label"), sourceTypeCombo)
             .addLabeledComponent(
                 EndpointCoverageBundle.message("settings.openapi.label"), openApiField)
-            .addComponent(new TitledSeparator(
-                EndpointCoverageBundle.message("settings.collections.title")))
+            .addComponent(
+                new TitledSeparator(EndpointCoverageBundle.message("settings.collections.title")))
             .addComponent(collectionsPanel)
-            .addComponent(new TitledSeparator(
-                EndpointCoverageBundle.message("settings.exclusions.title")))
+            .addComponent(
+                new TitledSeparator(EndpointCoverageBundle.message("settings.exclusions.title")))
             .addComponent(exclusionsPanel)
             .addComponentFillVertically(new JPanel(), 0)
             .getPanel();

@@ -5,8 +5,14 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "https://api.example.com" },
-    { "key": "token", "value": "secret-token" }
+    {
+      "key": "baseUrl",
+      "value": "https://api.example.com"
+    },
+    {
+      "key": "token",
+      "value": "secret-token"
+    }
   ],
   "item": [
     {
@@ -17,7 +23,12 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": ["pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });"] }
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
             }
           ],
           "request": {
@@ -25,10 +36,18 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/users?include=roles",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
               "query": [
-                { "key": "include", "value": "roles", "disabled": false }
+                {
+                  "key": "include",
+                  "value": "roles",
+                  "disabled": false
+                }
               ]
             }
           }
@@ -45,12 +64,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-Auth", "value": "{{token}}" }
+              {
+                "key": "X-Auth",
+                "value": "{{token}}"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\"name\": \"Ada\", \"email\": \"ada@example.com\"}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": "{{baseUrl}}/users"
           }

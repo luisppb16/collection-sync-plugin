@@ -13,8 +13,8 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Pure decision of whether the tool window triggers a coverage scan by itself when it first opens
- * in a project, driven by the {@code autoScanOnProjectOpen} setting. Extracted from
- * {@code CoveragePanel} so the gating is testable without building any UI.
+ * in a project, driven by the {@code autoScanOnProjectOpen} setting. Extracted from {@code
+ * CoveragePanel} so the gating is testable without building any UI.
  *
  * <p>Manual scans (toolbar button, Tools menu, context actions) never go through this policy: they
  * must always run, whatever the setting says.

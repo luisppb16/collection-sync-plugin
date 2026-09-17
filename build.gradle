@@ -24,7 +24,7 @@ repositories {
 }
 
 dependencies {
-    // JSON/YAML - Jackson (collections Postman v2.1 e Insomnia v4)
+    // JSON/YAML - Jackson (collections Postman v2.1 e Insomnia v4/v5)
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.5'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.21.5'
 

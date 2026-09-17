@@ -44,8 +44,8 @@ import org.jetbrains.annotations.Nullable;
  * the failures are recorded as human-readable messages ({@link #lastErrors()}) and the remaining
  * files still contribute to the report.
  *
- * <p>A scan is also never started while the project is in dumb mode (indexing): it is deferred
- * with {@link DumbService#runWhenSmart(Runnable)} until the indexes are queryable, because the
+ * <p>A scan is also never started while the project is in dumb mode (indexing): it is deferred with
+ * {@link DumbService#runWhenSmart(Runnable)} until the indexes are queryable, because the
  * controller scan reads stub indexes that only work in smart mode.
  */
 @Service(Service.Level.PROJECT)
@@ -108,35 +108,49 @@ public final class CoverageService {
 
   private static List<ApiRequest> parseCollection(File collectionFile, List<String> errors) {
     if (!collectionFile.isFile()) {
-      errors.add(EndpointCoverageBundle.message(
-          "service.error.collection.not.found", collectionFile.toString()));
+      errors.add(
+          EndpointCoverageBundle.message(
+              "service.error.collection.not.found", collectionFile.toString()));
       return List.of();
     }
     try {
       return CollectionParsers.forFile(collectionFile).parse(collectionFile);
     } catch (IOException | IllegalArgumentException brokenFile) {
-      errors.add(EndpointCoverageBundle.message(
-          "service.error.collection.parse", collectionFile.getName(), brokenFile.getMessage()));
+      errors.add(
+          EndpointCoverageBundle.message(
+              "service.error.collection.parse", collectionFile.getName(), brokenFile.getMessage()));
       return List.of();
     }
   }
 
   /**
-   * Runs a scan on a background thread and, when it finishes, executes the callback on the EDT.
-   * EDT only: the dedup of deferred scans relies on the caller, the {@code runWhenSmart} callback
-   * and the re-entrant {@code scanAsync} call all running on the same thread, so the deferred
-   * callback can never interleave with a new request (enforced with an assertion, enabled in
-   * tests and internal builds).
+   * Dedupes the registration of {@code runWhenSmart} callbacks: returns {@code true} only for the
+   * first request while the given flag is clear, so repeated scan requests in dumb mode never pile
+   * up duplicate callbacks. Extracted as a pure method so the dedupe is testable without a project.
+   *
+   * @param scheduled flag that stays {@code true} while one deferred scan is registered; must not
+   *     be null
+   * @return true when this call registered the deferred scan, false when one was already pending
+   */
+  static boolean tryScheduleOnce(@NotNull AtomicBoolean scheduled) {
+    return scheduled.compareAndSet(false, true);
+  }
+
+  /**
+   * Runs a scan on a background thread and, when it finishes, executes the callback on the EDT. EDT
+   * only: the dedup of deferred scans relies on the caller, the {@code runWhenSmart} callback and
+   * the re-entrant {@code scanAsync} call all running on the same thread, so the deferred callback
+   * can never interleave with a new request (enforced with an assertion, enabled in tests and
+   * internal builds).
    *
    * <p>When the project is in dumb mode (indexing), the scan is not started at all: the user is
-   * notified that the indexes are being built and the scan is deferred with
-   * {@link DumbService#runWhenSmart(Runnable)} so it only runs once the indexes are queryable.
-   * Repeated requests while dumb are deduped ({@link #tryScheduleOnce(AtomicBoolean)}): only one
-   * deferred scan is registered, the latest callback wins and the user is notified only once per
-   * dumb cycle.
+   * notified that the indexes are being built and the scan is deferred with {@link
+   * DumbService#runWhenSmart(Runnable)} so it only runs once the indexes are queryable. Repeated
+   * requests while dumb are deduped ({@link #tryScheduleOnce(AtomicBoolean)}): only one deferred
+   * scan is registered, the latest callback wins and the user is notified only once per dumb cycle.
    *
-   * <p>The callback is not executed when the project was closed before the scan finished
-   * (see {@link #queueScan(Runnable)}).
+   * <p>The callback is not executed when the project was closed before the scan finished (see
+   * {@link #queueScan(Runnable)}).
    *
    * <p>Concurrent scans are not serialized: each finished scan publishes its own snapshot and the
    * last one to finish stays visible.
@@ -168,31 +182,18 @@ public final class CoverageService {
       return;
     }
     notifyIndexesNotReady();
-    dumbService.runWhenSmart(() -> {
-      if (project.isDisposed()) {
-        return;
-      }
-      Runnable deferredOnDone = pendingOnDone;
-      pendingOnDone = null;
-      pendingSmartScan.set(false);
-      if (deferredOnDone != null) {
-        scanAsync(deferredOnDone);
-      }
-    });
-  }
-
-  /**
-   * Dedupes the registration of {@code runWhenSmart} callbacks: returns {@code true} only for the
-   * first request while the given flag is clear, so repeated scan requests in dumb mode never
-   * pile up duplicate callbacks. Extracted as a pure method so the dedupe is testable without a
-   * project.
-   *
-   * @param scheduled flag that stays {@code true} while one deferred scan is registered; must not
-   *     be null
-   * @return true when this call registered the deferred scan, false when one was already pending
-   */
-  static boolean tryScheduleOnce(@NotNull AtomicBoolean scheduled) {
-    return scheduled.compareAndSet(false, true);
+    dumbService.runWhenSmart(
+        () -> {
+          if (project.isDisposed()) {
+            return;
+          }
+          Runnable deferredOnDone = pendingOnDone;
+          pendingOnDone = null;
+          pendingSmartScan.set(false);
+          if (deferredOnDone != null) {
+            scanAsync(deferredOnDone);
+          }
+        });
   }
 
   private void queueScan(@NotNull Runnable onDone) {

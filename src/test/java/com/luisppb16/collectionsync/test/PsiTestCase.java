@@ -9,7 +9,6 @@ package com.luisppb16.collectionsync.test;
 
 import com.intellij.openapi.projectRoots.JavaSdk;
 import com.intellij.openapi.projectRoots.Sdk;
-import com.intellij.testFramework.LightProjectDescriptor;
 import com.intellij.testFramework.fixtures.DefaultLightProjectDescriptor;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase5;
 
@@ -25,22 +24,24 @@ import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase5;
  */
 public abstract class PsiTestCase extends LightJavaCodeInsightFixtureTestCase5 {
 
-    protected PsiTestCase() {
-        super(new DefaultLightProjectDescriptor() {
-            @Override
-            public Sdk getSdk() {
-                return JavaSdk.getInstance().createJdk("real-jdk", System.getProperty("java.home"), false);
-            }
+  protected PsiTestCase() {
+    super(
+        new DefaultLightProjectDescriptor() {
+          @Override
+          public Sdk getSdk() {
+            return JavaSdk.getInstance()
+                .createJdk("real-jdk", System.getProperty("java.home"), false);
+          }
         });
-    }
+  }
 
-    /**
-     * These tests build their sources in memory through the fixture, so no external test data
-     * directory is needed: a plain marker path keeps the fixture from probing the IntelliJ
-     * community test data roots.
-     */
-    @Override
-    protected String getTestDataPath() {
-        return "testData";
-    }
+  /**
+   * These tests build their sources in memory through the fixture, so no external test data
+   * directory is needed: a plain marker path keeps the fixture from probing the IntelliJ community
+   * test data roots.
+   */
+  @Override
+  protected String getTestDataPath() {
+    return "testData";
+  }
 }
