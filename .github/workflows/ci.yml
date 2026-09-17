@@ -85,6 +85,6 @@ jobs:
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vulnspotter-plugin-${{ github.sha }}
+          name: collection-sync-plugin-${{ github.sha }}
           path: build/distributions/*.zip
           retention-days: 7
