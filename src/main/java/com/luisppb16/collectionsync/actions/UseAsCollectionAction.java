@@ -81,6 +81,16 @@ public final class UseAsCollectionAction extends AnAction {
         Objects.requireNonNull(
             event.getData(CommonDataKeys.VIRTUAL_FILE), "selected file must not be null");
     File collectionFile = new File(selected.getPath());
+    if (!collectionFile.isFile()) {
+      // Distinguishes a file that no longer exists from one that parses badly: the generic
+      // "invalid collection" dialog would hide the real cause.
+      Messages.showErrorDialog(
+          project,
+          EndpointCoverageBundle.message(
+              "action.collection.missing.message", collectionFile.getName()),
+          EndpointCoverageBundle.message("action.collection.missing.title"));
+      return;
+    }
     if (!validateCollection(collectionFile, project)) {
       return;
     }

@@ -70,6 +70,22 @@ class CoverageServiceScanTest extends PsiTestCase {
     assertThat(result.collectionCount()).isEqualTo(1);
   }
 
+  @Test
+  @DisplayName(
+      "Given a collection file that no longer exists, when a scan runs, then the missing path is stored on the service")
+  void storesMissingCollectionPaths() {
+    Path missing = tempDir.resolve("deleted.json");
+    configureCollections(missing.toString());
+    CoverageService service = new CoverageService(getFixture().getProject());
+
+    CoverageResult result = service.scan();
+
+    assertThat(service.lastMissingCollectionPaths()).containsExactly(missing.toString());
+    assertThat(service.lastErrors()).hasSize(1);
+    assertThat(result.coveredCount()).isZero();
+    assertThat(result.uncoveredCount()).isZero();
+  }
+
   /**
    * Unit-level coverage of the dumb-mode dedup. Only the extracted pure method {@link
    * CoverageService#tryScheduleOnce(AtomicBoolean)} is exercised here; the rest of the defer flow

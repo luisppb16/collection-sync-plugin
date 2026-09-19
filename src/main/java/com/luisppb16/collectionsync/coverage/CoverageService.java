@@ -91,26 +91,59 @@ public final class CoverageService {
       @NotNull List<ApiEndpoint> endpoints,
       @NotNull List<File> collectionFiles,
       @NotNull List<ExclusionRule> exclusions) {
+    return computeScan(endpoints, collectionFiles, exclusions, List.of());
+  }
+
+  /**
+   * Same as {@link #computeScan(List, List, List)} appending the given scan issues (e.g. modules
+   * skipped because their index was not ready) to the recorded errors.
+   *
+   * @param scanIssues issues raised outside the per-collection parsing; must not be null
+   */
+  public static @NotNull ScanOutput computeScan(
+      @NotNull List<ApiEndpoint> endpoints,
+      @NotNull List<File> collectionFiles,
+      @NotNull List<ExclusionRule> exclusions,
+      @NotNull List<String> scanIssues) {
     Objects.requireNonNull(endpoints);
     Objects.requireNonNull(collectionFiles);
     Objects.requireNonNull(exclusions);
-    List<String> errors = new ArrayList<>();
+    Objects.requireNonNull(scanIssues);
+    List<String> errors = new ArrayList<>(scanIssues);
+    List<String> missingPaths = new ArrayList<>();
     List<ApiRequest> requests =
         collectionFiles.stream()
-            .flatMap(collectionFile -> parseCollection(collectionFile, errors).stream())
+            .flatMap(
+                collectionFile -> parseCollection(collectionFile, errors, missingPaths).stream())
             .toList();
-    return new ScanOutput(CoverageEngine.compute(endpoints, requests, exclusions), errors);
+    return new ScanOutput(
+        CoverageEngine.compute(endpoints, requests, exclusions), errors, missingPaths);
+  }
+
+  /**
+   * Filters the given collection paths down to the files that still exist on disk, so a dead
+   * persisted path can be removed from the settings. Kept static so it can be tested without a
+   * project and reused by the tool window.
+   *
+   * @param paths collection paths to filter; must not be null
+   * @return the paths that resolve to an existing regular file; never null
+   */
+  public static List<String> existingCollectionPaths(@NotNull List<String> paths) {
+    Objects.requireNonNull(paths);
+    return paths.stream().filter(path -> new File(path).isFile()).toList();
   }
 
   private static List<File> collectionFilesOf(EndpointCoverageSettings settings) {
     return settings.getCollectionFilePaths().stream().map(File::new).toList();
   }
 
-  private static List<ApiRequest> parseCollection(File collectionFile, List<String> errors) {
+  private static List<ApiRequest> parseCollection(
+      File collectionFile, List<String> errors, List<String> missingPaths) {
     if (!collectionFile.isFile()) {
       errors.add(
           EndpointCoverageBundle.message(
               "service.error.collection.not.found", collectionFile.toString()));
+      missingPaths.add(collectionFile.toString());
       return List.of();
     }
     try {
@@ -234,11 +267,29 @@ public final class CoverageService {
   }
 
   /**
-   * @return the collection files that failed during the last scan, with the reason; never null
+   * @return the issues recorded during the last scan (collection files that failed, with the
+   *     reason, and modules skipped by the endpoint source); never null
    */
   public List<String> lastErrors() {
     ScanOutput output = lastOutput;
     return output == null ? List.of() : output.errors();
+  }
+
+  /**
+   * @return the collection files of the last scan that no longer exist on disk; never null
+   */
+  public List<String> lastMissingCollectionPaths() {
+    ScanOutput output = lastOutput;
+    return output == null ? List.of() : output.missingCollectionPaths();
+  }
+
+  /**
+   * @return a snapshot of the last finished scan (result, issues and missing paths), or null when
+   *     no scan has run yet; readers wanting a consistent trio must read this once instead of the
+   *     three getters above
+   */
+  public @Nullable ScanOutput lastScan() {
+    return lastOutput;
   }
 
   /**
@@ -248,28 +299,43 @@ public final class CoverageService {
    */
   public @NotNull CoverageResult scan() {
     EndpointCoverageSettings settings = EndpointCoverageSettings.getInstance(project);
+    List<String> scanIssues = new ArrayList<>();
+    List<ApiEndpoint> endpoints = collectEndpoints(settings, scanIssues);
     ScanOutput output =
-        computeScan(collectEndpoints(settings), collectionFilesOf(settings), settings.toRules());
+        computeScan(endpoints, collectionFilesOf(settings), settings.toRules(), scanIssues);
     lastOutput = output;
     return output.result();
   }
 
-  private List<ApiEndpoint> collectEndpoints(EndpointCoverageSettings settings) {
+  private List<ApiEndpoint> collectEndpoints(
+      EndpointCoverageSettings settings, List<String> scanIssues) {
     return switch (settings.getSourceType()) {
       case OPEN_API -> new OpenApiEndpointSource(settings.getOpenApiFilePath()).collect(project);
       case CONTROLLER_ANNOTATIONS ->
           new ControllerEndpointSource(
                   List.of(new SpringAnnotationResolver(), new JaxRsAnnotationResolver()))
-              .collect(project);
+              .collect(
+                  project,
+                  (skippedModule, failure) ->
+                      scanIssues.add(
+                          EndpointCoverageBundle.message(
+                              "service.error.module.skipped",
+                              skippedModule.getName(),
+                              String.valueOf(failure.getMessage()))));
     };
   }
 
-  /** Outcome of one scan: the coverage report plus the per-file parsing errors. */
-  public record ScanOutput(CoverageResult result, List<String> errors) {
+  /**
+   * Outcome of one scan: the coverage report, the recorded issues (per-file parsing errors and
+   * modules skipped by the endpoint source) and the paths of the missing collection files.
+   */
+  public record ScanOutput(
+      CoverageResult result, List<String> errors, List<String> missingCollectionPaths) {
 
     public ScanOutput {
       Objects.requireNonNull(result, "result must not be null");
       errors = List.copyOf(errors);
+      missingCollectionPaths = List.copyOf(missingCollectionPaths);
     }
   }
 }

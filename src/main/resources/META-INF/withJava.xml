@@ -6,9 +6,11 @@
   -->
 
 <idea-plugin>
+    <!--
+      EndpointCoverageSettings is a light service (@Service(Service.Level.PROJECT) on the class): it
+      must not be registered here as well, or the platform would register it twice.
+    -->
     <extensions defaultExtensionNs="com.intellij">
-        <projectService serviceImplementation="com.luisppb16.collectionsync.settings.EndpointCoverageSettings"/>
-
         <projectConfigurable instance="com.luisppb16.collectionsync.settings.EndpointCoverageConfigurable"
                              id="EndpointCoverage"
                              displayName="Endpoint Coverage"

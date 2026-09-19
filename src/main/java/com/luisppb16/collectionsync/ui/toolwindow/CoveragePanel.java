@@ -8,6 +8,8 @@
 package com.luisppb16.collectionsync.ui.toolwindow;
 
 import com.intellij.icons.AllIcons;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
@@ -96,6 +98,12 @@ public final class CoveragePanel extends JPanel {
       new JLabel(EndpointCoverageBundle.message("toolwindow.summary.empty"));
   private final JBTable table = new JBTable(tableModel);
   private JButton exportButton;
+
+  /**
+   * Stays {@code true} while the last scans keep reporting zero endpoints, so the warning is
+   * reported once per run of empty scans instead of on every refresh.
+   */
+  private boolean zeroEndpointsNotified;
 
   /**
    * Builds the panel and schedules the first scan so the table is never empty on open, unless the
@@ -255,14 +263,15 @@ public final class CoveragePanel extends JPanel {
     coverageService.scanAsync(this::refresh);
   }
 
-  /** Refreshes the summary and the table from the last scan result; EDT only. */
+  /** Refreshes the summary and the table from the last scan snapshot; EDT only. */
   public void refresh() {
-    CoverageResult result = coverageService.lastResult();
-    if (result == null) {
+    CoverageService.ScanOutput output = coverageService.lastScan();
+    if (output == null) {
       summaryLabel.setText(EndpointCoverageBundle.message("toolwindow.summary.empty"));
       tableModel.setRows(List.of());
       return;
     }
+    CoverageResult result = output.result();
     summaryLabel.setText(
         EndpointCoverageBundle.message(
             "toolwindow.summary.format",
@@ -273,7 +282,9 @@ public final class CoveragePanel extends JPanel {
             result.collectionCount()));
     tableModel.setRows(
         Stream.concat(result.rows().stream(), result.excludedRows().stream()).toList());
-    notifyErrors(coverageService.lastErrors());
+    // One snapshot: result, issues and missing paths all come from the same finished scan.
+    notifyErrors(output.errors(), output.missingCollectionPaths());
+    notifyZeroEndpoints(result);
     applyFilters();
   }
 
@@ -529,24 +540,78 @@ public final class CoveragePanel extends JPanel {
     return viewRow < 0 ? null : rowAtView(viewRow);
   }
 
-  private void notifyErrors(@NotNull List<String> errors) {
-    if (!errors.isEmpty()) {
-      notifyWarning(String.join("\n", errors));
+  private void notifyErrors(@NotNull List<String> errors, @NotNull List<String> missingPaths) {
+    if (errors.isEmpty()) {
+      return;
     }
+    Notification warning = createNotification(NotificationType.WARNING, String.join("\n", errors));
+    if (!missingPaths.isEmpty()) {
+      warning.addAction(
+          NotificationAction.create(
+              EndpointCoverageBundle.message("toolwindow.notification.remove.missing.collections"),
+              (anActionEvent, currentNotification) -> removeMissingCollections()));
+    }
+    warning.notify(project);
+  }
+
+  /**
+   * Warns when the last scan found no endpoints at all, so an empty report is never silent: a 0%
+   * coverage with no endpoints means the project scan found nothing, not that nothing is covered.
+   * The warning is reported once per run of zero-endpoint scans, not on every refresh.
+   */
+  private void notifyZeroEndpoints(CoverageResult result) {
+    boolean zeroEndpoints =
+        result.coveredCount() == 0 && result.uncoveredCount() == 0 && result.excludedCount() == 0;
+    if (zeroEndpoints && !zeroEndpointsNotified) {
+      notifyWarning(EndpointCoverageBundle.message("service.notification.zero.endpoints"));
+    }
+    zeroEndpointsNotified = zeroEndpoints;
+  }
+
+  /** Removes the persisted collection paths whose file no longer exists and rescans; EDT only. */
+  private void removeMissingCollections() {
+    List<String> allPaths = settings.getCollectionFilePaths();
+    // The existence filter stats the disk, which must stay off the EDT (a stale network mount
+    // would freeze the IDE); the state update and the rescan stay on the EDT.
+    ApplicationManager.getApplication()
+        .executeOnPooledThread(
+            () -> {
+              List<String> existingPaths = CoverageService.existingCollectionPaths(allPaths);
+              int removedCount = allPaths.size() - existingPaths.size();
+              ApplicationManager.getApplication()
+                  .invokeLater(
+                      () -> removeMissingCollections(existingPaths, removedCount),
+                      project.getDisposed());
+            });
+  }
+
+  private void removeMissingCollections(@NotNull List<String> existingPaths, int removedCount) {
+    if (removedCount > 0) {
+      EndpointCoverageSettings.State updated =
+          EndpointCoverageSettings.copyForUpdate(settings.getState());
+      updated.collectionFilePaths = new ArrayList<>(existingPaths);
+      settings.setState(updated);
+      notifyInfo(
+          EndpointCoverageBundle.message(
+              "toolwindow.notification.missing.collections.removed", removedCount));
+    }
+    // Rescan either way: the table may be stale even when nothing was removed.
+    rescan();
+  }
+
+  private @NotNull Notification createNotification(
+      @NotNull NotificationType type, @NotNull String message) {
+    return NotificationGroupManager.getInstance()
+        .getNotificationGroup(NOTIFICATION_GROUP_ID)
+        .createNotification(message, type);
   }
 
   private void notifyInfo(@NotNull String message) {
-    NotificationGroupManager.getInstance()
-        .getNotificationGroup(NOTIFICATION_GROUP_ID)
-        .createNotification(message, NotificationType.INFORMATION)
-        .notify(project);
+    createNotification(NotificationType.INFORMATION, message).notify(project);
   }
 
   private void notifyWarning(@NotNull String message) {
-    NotificationGroupManager.getInstance()
-        .getNotificationGroup(NOTIFICATION_GROUP_ID)
-        .createNotification(message, NotificationType.WARNING)
-        .notify(project);
+    createNotification(NotificationType.WARNING, message).notify(project);
   }
 
   /**

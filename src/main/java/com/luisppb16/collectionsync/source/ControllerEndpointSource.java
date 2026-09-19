@@ -169,22 +169,44 @@ public final class ControllerEndpointSource implements EndpointSource {
 
   @Override
   public @NotNull List<ApiEndpoint> collect(@NotNull Project project) {
+    // collectModules already WARN-logs every skipped module: the interface entry point needs no
+    // extra failure callback.
+    return collect(project, (skippedModule, failure) -> {});
+  }
+
+  /**
+   * Same as {@link #collect(Project)}, but every module skipped by the per-module degradation is
+   * additionally reported through {@code onModuleFailure}, so callers can surface the degradation
+   * to the user instead of leaving it in the IDE log only. The WARN log entry is written for every
+   * skipped module either way.
+   *
+   * @param project current project; must not be null
+   * @param onModuleFailure invoked for every module skipped by the degradation; must not be null
+   * @return the endpoints of every module that scanned successfully; never null
+   */
+  public @NotNull List<ApiEndpoint> collect(
+      @NotNull Project project, @NotNull BiConsumer<Module, RuntimeException> onModuleFailure) {
     Objects.requireNonNull(project);
+    Objects.requireNonNull(onModuleFailure, "onModuleFailure must not be null");
     // PSI access from a background thread requires a read action, and the stub index behind
     // PsiShortNamesCache is only queryable in smart mode: inSmartMode waits for smart mode
     // (and retries if indexing restarts mid-scan) instead of failing with
     // IndexNotReadyException. This is the non-deprecated equivalent of the old
     // DumbService.runReadActionInSmartMode, which is deprecated in the 2026.2 platform.
-    return ReadAction.nonBlocking(() -> collectModules(project))
+    return ReadAction.nonBlocking(() -> collectModules(project, onModuleFailure))
         .inSmartMode(project)
         .executeSynchronously();
   }
 
-  private List<ApiEndpoint> collectModules(@NotNull Project project) {
+  private List<ApiEndpoint> collectModules(
+      @NotNull Project project, @NotNull BiConsumer<Module, RuntimeException> onModuleFailure) {
     return collectSkippingFailedModules(
         List.of(ModuleManager.getInstance(project).getModules()),
         module -> endpointsOfModule(module).toList(),
-        ControllerEndpointSource::logSkippedModule);
+        (module, failure) -> {
+          logSkippedModule(module, failure);
+          onModuleFailure.accept(module, failure);
+        });
   }
 
   private Stream<ApiEndpoint> endpointsOfModule(Module module) {

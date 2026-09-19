@@ -100,6 +100,53 @@ class CoverageServiceTest {
                 "service.error.collection.empty", "empty-collection.json"));
   }
 
+  @Test
+  @DisplayName(
+      "Given a missing collection file among valid ones, when the scan is computed, then the missing path is recorded on its own list")
+  void recordsMissingCollectionPaths() throws IOException {
+    Path missing = tempDir.resolve("missing.json");
+    Path valid = write("valid.json", VALID_COLLECTION);
+
+    ScanOutput output =
+        CoverageService.computeScan(
+            List.of(), List.of(missing.toFile(), valid.toFile()), List.of());
+
+    assertThat(output.missingCollectionPaths()).containsExactly(missing.toString());
+    assertThat(output.result().collectionCount()).isEqualTo(1);
+    assertThat(output.result().orphanCount()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName(
+      "Given scan issues raised outside the collection parsing, when the scan is computed, then they are appended to the recorded errors")
+  void appendsScanIssuesToErrors() throws IOException {
+    Path valid = write("valid.json", VALID_COLLECTION);
+
+    ScanOutput output =
+        CoverageService.computeScan(
+            List.of(), List.of(valid.toFile()), List.of(), List.of("Module 'x' skipped"));
+
+    assertThat(output.errors()).containsExactly("Module 'x' skipped");
+    assertThat(output.result().orphanCount()).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName(
+      "Given collection paths where some files no longer exist, when they are filtered, then only the paths of existing files remain")
+  void keepsOnlyExistingCollectionPaths() throws IOException {
+    Path existing = write("existing.json", VALID_COLLECTION);
+
+    List<String> filtered =
+        CoverageService.existingCollectionPaths(
+            List.of(
+                existing.toString(),
+                tempDir.resolve("gone.json").toString(),
+                "",
+                "/definitely/missing.json"));
+
+    assertThat(filtered).containsExactly(existing.toString());
+  }
+
   private Path write(String fileName, String content) throws IOException {
     Path path = tempDir.resolve(fileName);
     Files.writeString(path, content);

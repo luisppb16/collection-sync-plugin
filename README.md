@@ -45,6 +45,11 @@ Anclada a la derecha, disponible en proyectos con módulos Java:
 - **Filtros**: campo de texto (path/owner/module, insensible a mayúsculas) y combo de estado (All / Covered /
   Uncovered / Orphan / Excluded). La tabla ordena por cualquier columna.
 - **Resumen**: `X covered · Y uncovered · Z orphan · W excluded · N collections`.
+- **Errores de escaneo**: si una colección no se puede leer o ya no existe, se notifica el fallo;
+  cuando el fichero ya no existe, la notificación incluye la acción **"Quitar las colecciones que
+  ya no existen"**, que las elimina de la configuración y reescanea. Si el escaneo no encuentra
+  ningún endpoint en el proyecto (0 cubiertos, 0 no cubiertos y 0 excluidos), se notifica también,
+  para no confundir un escaneo vacío con una cobertura nula.
 
 ### 3. Navegación
 
@@ -67,8 +72,8 @@ controlador en el editor; si el origen es `OPEN_API`, abre el documento configur
   JSON, YAML o texto plano (la extensión no importa):
     - **Endpoint Coverage: Check Coverage with This Collection**: valida que el fichero es una
       colección Postman v2.1 / Insomnia v4/v5 con al menos una petición, la añade a *Collection
-      files* (sin duplicados), reescanea y abre la tool window. Si no es una colección válida (o
-      está vacía), muestra un error y no toca la configuración.
+      files* (sin duplicados), reescanea y abre la tool window. Si el fichero ya no existe, o no es
+      una colección válida (o está vacía), muestra un error y no toca la configuración.
     - **Endpoint Coverage: Use as OpenAPI Source**: valida que el documento contiene un objeto
       `paths`, lo fija como *OpenAPI file path* con source type `OPEN_API`, reescanea y abre la
       tool window. Si el fichero no es un OpenAPI 3.x válido, muestra un error y no toca la
