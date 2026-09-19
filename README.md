@@ -1,127 +1,124 @@
 # CollectionSync — Endpoint Coverage Tracker
 
-Plugin de IntelliJ IDEA que compara los **endpoints REST reales** de tu proyecto Java (documento
-OpenAPI 3.x o controladores Spring MVC / JAX-RS/Quarkus) contra las peticiones de tus **colecciones Postman (v2.1) e
-Insomnia (v4/v5)**, y te dice, endpoint a endpoint, qué está cubierto,
-qué falta y qué peticiones se han quedado huérfanas.
+IntelliJ IDEA plugin that compares the **real REST endpoints** of your Java project (an OpenAPI
+3.x document or Spring MVC / JAX-RS/Quarkus controllers) against the requests in your **Postman
+(v2.1) and Insomnia (v4/v5) collections**, and tells you, endpoint by endpoint, what is covered,
+what is missing and which requests have been left orphaned.
 
-## Qué hace
+## What it does
 
-- **Descubre endpoints**: escanea controladores Spring (`@RestController`, `@RequestMapping`…) y
-  JAX-RS/Quarkus (`@Path`, `@GET`…), o lee un documento OpenAPI 3.x local, para construir la lista
-  de endpoints del proyecto.
-- **Lee colecciones**: parsea colecciones Postman v2.1 o Insomnia v4/v5 (JSON y YAML, incluido el
-  formato anidado v5). Un fichero roto no aborta el informe: se registra el error y el resto
-  sigue contribuyendo.
-- **Calcula cobertura**: clasifica cada endpoint como `COVERED`, `UNCOVERED`, `ORPHAN` o
-  `EXCLUDED` mediante matching estructural de paths (las variables casan por posición; el modo
-  estricto mantiene separados `/users/{id}` y `/users/me`).
-- **Exporta el informe**: Markdown o CSV, con resumen y todas las filas (incluidas las
-  excluidas).
+- **Discovers endpoints**: scans Spring controllers (`@RestController`, `@RequestMapping`…) and
+  JAX-RS/Quarkus (`@Path`, `@GET`…), or reads a local OpenAPI 3.x document, to build the project's
+  endpoint list.
+- **Reads collections**: parses Postman v2.1 or Insomnia v4/v5 collections (JSON and YAML,
+  including the nested v5 format). A broken file does not abort the report: the error is recorded
+  and the rest keeps contributing.
+- **Computes coverage**: classifies each endpoint as `COVERED`, `UNCOVERED`, `ORPHAN` or
+  `EXCLUDED` through structural path matching (variables match by position; strict mode keeps
+  `/users/{id}` and `/users/me` apart).
+- **Exports the report**: Markdown or CSV, with a summary and every row (excluded ones included).
 
-## Uso
+## Usage
 
-### 1. Configuración
+### 1. Configuration
 
 `Settings/Preferences → Tools → Endpoint Coverage`:
 
-- **Escanear cobertura al abrir el proyecto**: activado por defecto (`true`); la primera vez que se
-  abre la tool window en el proyecto se lanza un escaneo automático. Al desactivarlo, la tool
-  window arranca en su estado vacío y solo los reescaneos manuales (botón *Reescanear*, menú *Tools*, clic derecho)
-  recalculan la cobertura.
-- **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS) o `OPEN_API` (documento local).
-- **OpenAPI file path**: ruta del documento OpenAPI 3.x (solo si el origen es `OPEN_API`).
-- **Collection files**: ficheros de colección Postman/Insomnia a comparar (añádelos aquí o desde
-  la propia tool window).
-- **Exclusions**: reglas de exclusión (método + patrón de path, p. ej. `GET /actuator/{name}`).
+- **Scan coverage when the project opens**: enabled by default (`true`); the first time the tool
+  window is opened in the project, an automatic scan is launched. When disabled, the tool window
+  starts in its empty state and only manual rescans (the *Rescan* button, the *Tools* menu,
+  right-click) recompute coverage.
+- **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS) or `OPEN_API` (local document).
+- **OpenAPI file**: path of the OpenAPI 3.x document (only when the source is `OPEN_API`).
+- **Collection files**: Postman/Insomnia collection files to compare against (add them here or
+  from the tool window itself).
+- **Exclusions**: exclusion rules (method + path pattern, e.g. `GET /actuator/{name}`).
 
-### 2. Tool window "Endpoint Coverage"
+### 2. "Endpoint Coverage" tool window
 
-Anclada a la derecha, disponible en proyectos con módulos Java:
+Docked on the right, available in projects with Java modules:
 
-- **Reescanear**: recalcula la cobertura en segundo plano.
-- **Seleccionar colecciones…**: añade ficheros de colección al listado y reescanea.
-- **Exportar informe**: guarda el informe actual en Markdown (`.md`) o CSV (`.csv`).
-- **Filtros**: campo de texto (path/owner/module, insensible a mayúsculas) y combo de estado (All / Covered /
-  Uncovered / Orphan / Excluded). La tabla ordena por cualquier columna.
-- **Resumen**: `X covered · Y uncovered · Z orphan · W excluded · N collections`.
-- **Errores de escaneo**: si una colección no se puede leer o ya no existe, se notifica el fallo;
-  cuando el fichero ya no existe, la notificación incluye la acción **"Quitar las colecciones que
-  ya no existen"**, que las elimina de la configuración y reescanea. Si el escaneo no encuentra
-  ningún endpoint en el proyecto (0 cubiertos, 0 no cubiertos y 0 excluidos), se notifica también,
-  para no confundir un escaneo vacío con una cobertura nula.
+- **Rescan**: recomputes coverage in the background.
+- **Select collections…**: adds collection files to the list and rescans.
+- **Export report**: saves the current report as Markdown (`.md`) or CSV (`.csv`).
+- **Filters**: text field (path/owner/module, case-insensitive) and a status combo (All / Covered /
+  Uncovered / Orphan / Excluded). The table sorts by any column.
+- **Summary**: `X covered · Y uncovered · Z orphan · W excluded · N collections`.
+- **Scan errors**: if a collection cannot be read or no longer exists, the failure is reported;
+  when the file no longer exists, the notification includes the **"Remove collections that no
+  longer exist"** action, which removes them from the settings and rescans. If the scan finds no
+  endpoints in the project (0 covered, 0 uncovered and 0 excluded), that is reported too, so an
+  empty scan is not mistaken for zero coverage.
 
-### 3. Navegación
+### 3. Navigation
 
-Doble clic sobre una fila: si el endpoint se descubrió desde el código, abre el método
-controlador en el editor; si el origen es `OPEN_API`, abre el documento configurado.
+Double-click a row: if the endpoint was discovered from code, the controller method opens in the
+editor; when the source is `OPEN_API`, the configured document opens.
 
-### 4. Exclusiones
+### 4. Exclusions
 
-- Clic derecho sobre un endpoint (Covered/Uncovered) → **"Excluir de la cobertura"**: añade la
-  regla `método + path` a la configuración y reescanea. La exclusión es estricta: excluir
-  `/users/{id}` no arrastra al endpoint hermano `/users/me`.
-- Clic derecho sobre una fila `EXCLUDED` → **"Quitar exclusión"**: elimina la regla
-  correspondiente y reescanea.
+- Right-click an endpoint (Covered/Uncovered) → **"Exclude from coverage"**: adds the
+  `method + path` rule to the settings and rescans. The exclusion is strict: excluding
+  `/users/{id}` does not drag along the sibling endpoint `/users/me`.
+- Right-click an `EXCLUDED` row → **"Remove exclusion"**: removes the matching rule and rescans.
 
-### 5. Menú y clic derecho
+### 5. Menu and right-click
 
-- **Tools → Analyze Endpoints Coverage**: activa la tool window y lanza un reescaneo en segundo
-  plano (equivalente a "Reescanear", disponible sin abrir la tool window).
-- **Clic derecho** (en el Project view o en el editor) sobre un fichero que el IDE reconozca como
-  JSON, YAML o texto plano (la extensión no importa):
-    - **Endpoint Coverage: Check Coverage with This Collection**: valida que el fichero es una
-      colección Postman v2.1 / Insomnia v4/v5 con al menos una petición, la añade a *Collection
-      files* (sin duplicados), reescanea y abre la tool window. Si el fichero ya no existe, o no es
-      una colección válida (o está vacía), muestra un error y no toca la configuración.
-    - **Endpoint Coverage: Use as OpenAPI Source**: valida que el documento contiene un objeto
-      `paths`, lo fija como *OpenAPI file path* con source type `OPEN_API`, reescanea y abre la
-      tool window. Si el fichero no es un OpenAPI 3.x válido, muestra un error y no toca la
-      configuración.
+- **Tools → Analyze Endpoints Coverage**: focuses the tool window and launches a background rescan
+  (equivalent to "Rescan", available without opening the tool window).
+- **Right-click** (in the Project view or the editor) a file the IDE recognizes as JSON, YAML or
+  plain text (the extension does not matter):
+  - **Endpoint Coverage: Check Coverage with This Collection**: validates that the file is a
+    Postman v2.1 / Insomnia v4/v5 collection with at least one request, adds it to *Collection
+    files* (no duplicates), rescans and opens the tool window. If the file no longer exists, or is
+    not a valid collection (or is empty), shows an error and leaves the settings untouched.
+  - **Endpoint Coverage: Use as OpenAPI Source**: validates that the document contains a `paths`
+    object, sets it as the *OpenAPI file* with source type `OPEN_API`, rescans and opens the tool
+    window. If the file is not a valid OpenAPI 3.x document, shows an error and leaves the
+    settings untouched.
 
-## Construcción y prueba
+## Building and testing
 
 ```bash
-./gradlew buildPlugin   # construye el zip del plugin
-./gradlew test          # suite de tests (dominio, parsers, settings, PSI)
-./gradlew runIde        # lanza un IDE sandbox con el plugin instalado
+./gradlew buildPlugin   # builds the plugin zip
+./gradlew test          # test suite (domain, parsers, settings, PSI)
+./gradlew runIde        # launches a sandbox IDE with the plugin installed
 ```
 
-Requiere JDK 21+ (el proyecto compila con toolchain Java 25) e IntelliJ IDEA 2026.2+.
+Requires JDK 21+ (the project compiles with the Java 25 toolchain) and IntelliJ IDEA 2026.2+.
 
-## Idiomas
+## Languages
 
-Toda la UI del plugin (acciones, tool window, página de configuración, notificaciones y mensajes
-del escaneo) se sirve desde un único resource bundle estándar de IntelliJ:
+All of the plugin UI (actions, tool window, settings page, notifications and scan messages) is
+served from a single standard IntelliJ resource bundle:
 
-- `src/main/resources/messages/EndpointCoverageBundle.properties` — inglés (bundle por defecto, sin
-  sufijo).
-- `src/main/resources/messages/EndpointCoverageBundle_es.properties` — español.
+- `src/main/resources/messages/EndpointCoverageBundle.properties` — English (default bundle, no
+  suffix).
+- `src/main/resources/messages/EndpointCoverageBundle_es.properties` — Spanish.
 
-El IDE resuelve el bundle según el locale del IDE. Los textos de las acciones del menú usan la
-convención estándar `action.<actionId>.text` / `action.<actionId>.description` declarada con
-`<actions resource-bundle="messages.EndpointCoverageBundle">` en `withJava.xml`; el resto de
-cadenas se resuelven desde código con la clase
-`com.luisppb16.collectionsync.i18n.EndpointCoverageBundle`.
+The IDE resolves the bundle according to the IDE locale. Menu action texts use the standard
+`action.<actionId>.text` / `action.<actionId>.description` convention declared with
+`<actions resource-bundle="messages.EndpointCoverageBundle">` in `withJava.xml`; the remaining
+strings are resolved from code through the
+`com.luisppb16.collectionsync.i18n.EndpointCoverageBundle` class.
 
-**Añadir otro idioma**: crea `src/main/resources/messages/EndpointCoverageBundle_xx.properties`
-(p. ej. `_fr`, `_de`) con las mismas claves del bundle por defecto y las traducciones del idioma.
-Los ficheros `.properties` se leen como UTF-8 (acentos directos, sin escapes `\uXXXX`). El test
-`EndpointCoverageBundleTest` valida automáticamente que el nuevo bundle tenga paridad de claves con
-el por defecto: si le faltan claves o sobran, el test falla.
+**Adding another language**: create `src/main/resources/messages/EndpointCoverageBundle_xx.properties`
+(e.g. `_fr`, `_de`) with the same keys as the default bundle and the translations for that
+language. The `.properties` files are read as UTF-8 (direct accents, no `\uXXXX` escapes). The
+`EndpointCoverageBundleTest` test automatically validates that the new bundle has key parity with
+the default one: missing or extra keys fail the test.
 
-No se traducen, por decisión de diseño: la `description` y los `change-notes` de `plugin.xml`
-(marketplace, en inglés) y el informe Markdown/CSV exportado (formato estable consumible por
-otras herramientas). Los mensajes de excepción internos (fail-fast) son para desarrolladores y
-también permanecen en inglés.
+Not translated, by design: the `description` and `change-notes` of `plugin.xml` (marketplace,
+English) and the exported Markdown/CSV report (stable format consumable by other tools). Internal
+exception messages (fail-fast) are developer-facing and stay in English as well.
 
-## Fuera de alcance
+## Out of scope
 
-- **Generar** especificaciones OpenAPI (solo se leen documentos existentes).
-- **Sincronización en la nube**: Postman Cloud / Insomnia Git Sync.
-- **Sub-resource locators** de JAX-RS (`@Path` en métodos que devuelven otro resource).
+- **Generating** OpenAPI specifications (only existing documents are read).
+- **Cloud sync**: Postman Cloud / Insomnia Git Sync.
+- JAX-RS **sub-resource locators** (`@Path` on methods returning another resource).
 - **Micronaut** (`@Controller`, `@Get`…).
-- **Swagger 2.0** (solo OpenAPI 3.x).
+- **Swagger 2.0** (OpenAPI 3.x only).
 
 ---
 
