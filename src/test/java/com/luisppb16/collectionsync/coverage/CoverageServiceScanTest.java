@@ -33,6 +33,17 @@ class CoverageServiceScanTest extends PsiTestCase {
               {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
             ]}""";
 
+  private static final String OPENAPI_SPEC =
+      """
+            {"openapi": "3.0.0", "info": {"title": "Carro API", "version": "1.0"},
+             "paths": {"/carro": {"get": {"summary": "Get carro", "responses": {}}}}}""";
+
+  private static final String PREFIXED_COLLECTION =
+      """
+            {"info": {"name": "Prefixed API"}, "item": [
+              {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
+            ]}""";
+
   @TempDir Path tempDir;
 
   @Test
@@ -86,6 +97,23 @@ class CoverageServiceScanTest extends PsiTestCase {
     assertThat(result.uncoveredCount()).isZero();
   }
 
+  @Test
+  @DisplayName(
+      "Given settings with a base path, an OpenAPI source and a collection declaring that base path, "
+          + "when a scan runs, then the base path is threaded from the settings and the pair matches")
+  void matchesRequestsUnderConfiguredBasePath() throws IOException {
+    Path spec = write("api.json", OPENAPI_SPEC);
+    Path prefixed = write("prefixed.json", PREFIXED_COLLECTION);
+    configureState(spec.toString(), "/api/test/v1", prefixed.toString());
+    CoverageService service = new CoverageService(getFixture().getProject());
+
+    CoverageResult result = service.scan();
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isZero();
+    assertThat(service.lastErrors()).isEmpty();
+  }
+
   /**
    * Unit-level coverage of the dumb-mode dedup. Only the extracted pure method {@link
    * CoverageService#tryScheduleOnce(AtomicBoolean)} is exercised here; the rest of the defer flow
@@ -129,6 +157,15 @@ class CoverageServiceScanTest extends PsiTestCase {
   private void configureCollections(String... paths) {
     EndpointCoverageSettings.State state = new EndpointCoverageSettings.State();
     state.collectionFilePaths.addAll(Arrays.asList(paths));
+    EndpointCoverageSettings.getInstance(getFixture().getProject()).setState(state);
+  }
+
+  private void configureState(String openApiFilePath, String basePath, String... collectionPaths) {
+    EndpointCoverageSettings.State state = new EndpointCoverageSettings.State();
+    state.sourceType = EndpointCoverageSettings.SourceType.OPEN_API.name();
+    state.openApiFilePath = openApiFilePath;
+    state.basePath = basePath;
+    state.collectionFilePaths.addAll(Arrays.asList(collectionPaths));
     EndpointCoverageSettings.getInstance(getFixture().getProject()).setState(state);
   }
 }

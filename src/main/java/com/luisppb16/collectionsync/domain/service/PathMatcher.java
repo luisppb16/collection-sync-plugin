@@ -35,6 +35,10 @@ import java.util.stream.IntStream;
  *
  * <p>Combined with {@link PathNormalizer} this makes {@code /users/{id}}, {@code /users/:userId},
  * {@code /users/{{id}}} and {@code /users/17} all equivalent.
+ *
+ * <p>The same rules also drive <b>prefix stripping</b> ({@link #stripPrefix}): a user-configured
+ * base path is removed from the root of a path when its leading segments match loosely, so the same
+ * structural comparison then applies to the remainder.
  */
 public final class PathMatcher {
 
@@ -68,6 +72,38 @@ public final class PathMatcher {
     return pattern.size() == candidate.size()
         && IntStream.range(0, pattern.size())
             .allMatch(position -> strictSegment(pattern.get(position), candidate.get(position)));
+  }
+
+  /**
+   * Removes the given prefix from a normalized path when the path starts with it, leaving the path
+   * untouched otherwise.
+   *
+   * <p>The prefix applies to the <b>root</b> of the path only: the path is stripped when it has at
+   * least as many segments as the prefix and the first {@code prefix.size()} positions are
+   * compatible under the loose rule of {@link #matches} (a variable matches any segment, literals
+   * compare case-sensitively). A mismatch, a path shorter than the prefix or an empty prefix
+   * returns the path unchanged: a prefix found mid-path is never removed and stripping never fails.
+   *
+   * <p>Used to ignore a user-configured base path (e.g. {@code /api/test/v1}) on both sides of the
+   * coverage comparison, whichever side declares it: the collection URL, the endpoint template or
+   * both. An empty prefix (e.g. the user typed only a host, which normalizes to no segments) is a
+   * no-op, so an unset base path behaves exactly like the plain structural match.
+   *
+   * @param segments normalized path to strip; must not be null
+   * @param prefixSegments normalized prefix; must not be null, possibly empty
+   * @return the path without the matching prefix, or the path itself when the prefix does not
+   *     apply; never null, inputs never mutated
+   */
+  public static List<Segment> stripPrefix(List<Segment> segments, List<Segment> prefixSegments) {
+    int prefixSize = prefixSegments.size();
+    if (prefixSize == 0 || segments.size() < prefixSize) {
+      return segments;
+    }
+    boolean startsWithPrefix =
+        IntStream.range(0, prefixSize)
+            .allMatch(
+                position -> looseSegment(prefixSegments.get(position), segments.get(position)));
+    return startsWithPrefix ? List.copyOf(segments.subList(prefixSize, segments.size())) : segments;
   }
 
   private static boolean looseSegment(Segment first, Segment second) {

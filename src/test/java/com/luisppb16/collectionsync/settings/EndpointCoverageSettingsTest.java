@@ -43,9 +43,11 @@ class EndpointCoverageSettingsTest {
 
     assertThat(state.sourceType).isEqualTo("CONTROLLER_ANNOTATIONS");
     assertThat(state.openApiFilePath).isEmpty();
+    assertThat(state.basePath).isEmpty();
     assertThat(state.collectionFilePaths).isEmpty();
     assertThat(state.exclusions).isEmpty();
     assertThat(state.autoScanOnProjectOpen).isTrue();
+    assertThat(settings.getBasePath()).isEmpty();
     assertThat(settings.isAutoScanOnProjectOpen()).isTrue();
     assertThat(settings.toRules()).isEmpty();
   }
@@ -91,6 +93,7 @@ class EndpointCoverageSettingsTest {
     State loadedState = new State();
     loadedState.sourceType = null;
     loadedState.openApiFilePath = null;
+    loadedState.basePath = null;
     loadedState.collectionFilePaths = null;
     loadedState.exclusions = null;
 
@@ -99,6 +102,7 @@ class EndpointCoverageSettingsTest {
     State state = settings.getState();
     assertThat(state.sourceType).isEqualTo("CONTROLLER_ANNOTATIONS");
     assertThat(state.openApiFilePath).isEmpty();
+    assertThat(state.basePath).isEmpty();
     assertThat(state.collectionFilePaths).isEmpty();
     assertThat(state.exclusions).isEmpty();
     assertThat(settings.toRules()).isEmpty();
@@ -189,6 +193,12 @@ class EndpointCoverageSettingsTest {
     secondState.openApiFilePath = "   ";
     assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isTrue();
 
+    secondState.basePath = "/api/v1";
+    assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isFalse();
+
+    secondState.basePath = "  ";
+    assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isTrue();
+
     secondState.collectionFilePaths = new ArrayList<>(List.of("postman.json"));
     assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isFalse();
 
@@ -207,6 +217,31 @@ class EndpointCoverageSettingsTest {
     assertThat(EndpointCoverageSettings.equalsState(null, null)).isTrue();
     assertThat(EndpointCoverageSettings.equalsState(null, new State())).isFalse();
     assertThat(EndpointCoverageSettings.equalsState(new State(), null)).isFalse();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a state with a base path, when it is copied for update, then the base path is carried over")
+  void copiesBasePathWhenUpdatingState() {
+    State current = new State();
+    current.basePath = "/api/test/v1";
+
+    State updated = EndpointCoverageSettings.copyForUpdate(current);
+
+    assertThat(updated.basePath).isEqualTo("/api/test/v1");
+  }
+
+  @Test
+  @DisplayName(
+      "Given a configured base path, when the state is stored and read back, then the value is kept")
+  void roundTripsBasePath() {
+    State configured = new State();
+    configured.basePath = "/api/test/v1";
+
+    settings.setState(configured);
+
+    assertThat(settings.getBasePath()).isEqualTo("/api/test/v1");
+    assertThat(settings.getState().basePath).isEqualTo("/api/test/v1");
   }
 
   @Test

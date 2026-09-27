@@ -17,6 +17,7 @@ import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.domain.model.Segment;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 /**
@@ -27,7 +28,9 @@ import java.util.stream.Stream;
  *
  * <ol>
  *   <li>Every endpoint path, request URL and exclusion pattern is normalized once through {@link
- *       PathNormalizer}.
+ *       PathNormalizer}; when a base path is configured, its normalized segments are stripped from
+ *       the root of all three ({@link PathMatcher#stripPrefix}), so a base URL declared only in the
+ *       collections, only in the code, or in both places does not break the comparison.
  *   <li><b>Exclusions first.</b> An endpoint is excluded when some {@link ExclusionRule} has the
  *       same HTTP method and strictly matches its path ({@link PathMatcher#matchesStrict}:
  *       variables only match variables, so excluding {@code /users/{id}} never swallows the sibling
@@ -63,12 +66,24 @@ public final class CoverageEngine {
    * @param endpoints real endpoints of the project; must not be null
    * @param requests collection requests; must not be null
    * @param exclusions user exclusion rules; must not be null
+   * @param basePath user-defined URL root (e.g. {@code /api/test/v1}) ignored on both sides before
+   *     matching; must not be null, may be empty
    * @return the report with display-sorted rows and aggregate counts; never null
    */
   public static CoverageResult compute(
-      List<ApiEndpoint> endpoints, List<ApiRequest> requests, List<ExclusionRule> exclusions) {
+      List<ApiEndpoint> endpoints,
+      List<ApiRequest> requests,
+      List<ExclusionRule> exclusions,
+      String basePath) {
+    Objects.requireNonNull(basePath, "basePath must not be null");
+    List<Segment> basePathSegments = PathNormalizer.normalize(basePath);
     List<Rule> rules =
-        exclusions.stream().map(rule -> new Rule(rule.method(), rule.segments())).toList();
+        exclusions.stream()
+            .map(
+                rule ->
+                    new Rule(
+                        rule.method(), PathMatcher.stripPrefix(rule.segments(), basePathSegments)))
+            .toList();
     List<Shape> shapes =
         endpoints.stream()
             .map(
@@ -76,7 +91,8 @@ public final class CoverageEngine {
                     new Shape(
                         endpoint,
                         new Rule(
-                            endpoint.method(), PathNormalizer.normalize(endpoint.pathTemplate()))))
+                            endpoint.method(),
+                            normalizeAgainstBasePath(endpoint.pathTemplate(), basePathSegments))))
             .toList();
     List<Shape> excludedShapes =
         shapes.stream().filter(shape -> isExcludedByRules(shape, rules)).toList();
@@ -84,7 +100,10 @@ public final class CoverageEngine {
         shapes.stream().filter(shape -> !isExcludedByRules(shape, rules)).toList();
     List<RequestShape> requestShapes =
         requests.stream()
-            .map(request -> new RequestShape(request, PathNormalizer.normalize(request.rawUrl())))
+            .map(
+                request ->
+                    new RequestShape(
+                        request, normalizeAgainstBasePath(request.rawUrl(), basePathSegments)))
             .toList();
 
     List<CoverageRow> excludedRows =
@@ -152,6 +171,12 @@ public final class CoverageEngine {
   private static boolean matchesStrictly(Rule first, Rule second) {
     return first.method() == second.method()
         && PathMatcher.matchesStrict(first.segments(), second.segments());
+  }
+
+  /** Normalizes a raw path and removes the configured base path from its root, when present. */
+  private static List<Segment> normalizeAgainstBasePath(
+      String raw, List<Segment> basePathSegments) {
+    return PathMatcher.stripPrefix(PathNormalizer.normalize(raw), basePathSegments);
   }
 
   private static CoverageRow rowOf(ApiEndpoint endpoint, CoverageStatus status) {

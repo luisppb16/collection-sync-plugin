@@ -8,8 +8,11 @@
 package com.luisppb16.collectionsync.coverage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.luisppb16.collectionsync.coverage.CoverageService.ScanOutput;
+import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
+import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -31,6 +34,12 @@ class CoverageServiceTest {
 
   private static final String BROKEN_COLLECTION = "definitely not json";
 
+  private static final String PREFIXED_COLLECTION =
+      """
+            {"info": {"name": "Prefixed API"}, "item": [
+              {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
+            ]}""";
+
   @TempDir Path tempDir;
 
   @Test
@@ -43,7 +52,7 @@ class CoverageServiceTest {
 
     ScanOutput output =
         CoverageService.computeScan(
-            List.of(), List.of(missing.toFile(), broken.toFile(), valid.toFile()), List.of());
+            List.of(), List.of(missing.toFile(), broken.toFile(), valid.toFile()), List.of(), "");
 
     assertThat(output.errors()).hasSize(2);
     assertThat(output.errors().stream().anyMatch(error -> error.contains(missing.toString())))
@@ -73,7 +82,7 @@ class CoverageServiceTest {
 
     ScanOutput output =
         CoverageService.computeScan(
-            List.of(), List.of(missing.toFile(), broken.toFile()), List.of());
+            List.of(), List.of(missing.toFile(), broken.toFile()), List.of(), "");
 
     assertThat(output.result().rows()).isEmpty();
     assertThat(output.result().coveredCount()).isZero();
@@ -89,7 +98,8 @@ class CoverageServiceTest {
   void recordsErrorForEmptyCollection() throws IOException {
     Path empty = write("empty-collection.json", "{\"resources\": []}");
 
-    ScanOutput output = CoverageService.computeScan(List.of(), List.of(empty.toFile()), List.of());
+    ScanOutput output =
+        CoverageService.computeScan(List.of(), List.of(empty.toFile()), List.of(), "");
 
     assertThat(output.result().orphanCount()).isZero();
     assertThat(output.errors()).hasSize(1);
@@ -109,7 +119,7 @@ class CoverageServiceTest {
 
     ScanOutput output =
         CoverageService.computeScan(
-            List.of(), List.of(missing.toFile(), valid.toFile()), List.of());
+            List.of(), List.of(missing.toFile(), valid.toFile()), List.of(), "");
 
     assertThat(output.missingCollectionPaths()).containsExactly(missing.toString());
     assertThat(output.result().collectionCount()).isEqualTo(1);
@@ -124,7 +134,7 @@ class CoverageServiceTest {
 
     ScanOutput output =
         CoverageService.computeScan(
-            List.of(), List.of(valid.toFile()), List.of(), List.of("Module 'x' skipped"));
+            List.of(), List.of(valid.toFile()), List.of(), "", List.of("Module 'x' skipped"));
 
     assertThat(output.errors()).containsExactly("Module 'x' skipped");
     assertThat(output.result().orphanCount()).isEqualTo(2);
@@ -145,6 +155,51 @@ class CoverageServiceTest {
                 "/definitely/missing.json"));
 
     assertThat(filtered).containsExactly(existing.toString());
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection request declaring the base path and an endpoint declared without it, "
+          + "when the scan is computed with that base path, then the endpoint is covered "
+          + "and no orphan remains")
+  void stripsConfiguredBasePathThroughTheScan() throws IOException {
+    Path prefixed = write("prefixed.json", PREFIXED_COLLECTION);
+    List<ApiEndpoint> endpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/carro", "CarroController", "app", null));
+
+    ScanOutput output =
+        CoverageService.computeScan(
+            endpoints, List.of(prefixed.toFile()), List.of(), "/api/test/v1");
+
+    assertThat(output.result().coveredCount()).isEqualTo(1);
+    assertThat(output.result().orphanCount()).isZero();
+    // the report keeps displaying the original paths, not the stripped ones
+    assertThat(output.result().rows().getFirst().path()).isEqualTo("/carro");
+  }
+
+  @Test
+  @DisplayName(
+      "Given the same fixtures with an empty base path, when the scan is computed, then the plain structural rule applies")
+  void keepsPlainStructuralMatchingWhenBasePathIsEmpty() throws IOException {
+    Path prefixed = write("prefixed.json", PREFIXED_COLLECTION);
+    List<ApiEndpoint> endpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/carro", "CarroController", "app", null));
+
+    ScanOutput output =
+        CoverageService.computeScan(endpoints, List.of(prefixed.toFile()), List.of(), "");
+
+    assertThat(output.result().coveredCount()).isZero();
+    assertThat(output.result().uncoveredCount()).isEqualTo(1);
+    assertThat(output.result().orphanCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("Given a null base path, when the scan is computed, then it fails fast")
+  void failsFastOnNullBasePath() {
+    // @NotNull parameters fail through the platform's runtime instrumentation, not requireNonNull
+    assertThatThrownBy(() -> CoverageService.computeScan(List.of(), List.of(), List.of(), null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("basePath");
   }
 
   private Path write(String fileName, String content) throws IOException {

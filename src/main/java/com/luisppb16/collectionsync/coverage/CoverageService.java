@@ -85,18 +85,21 @@ public final class CoverageService {
    * @param endpoints real endpoints of the project; must not be null
    * @param collectionFiles collection files to parse; must not be null
    * @param exclusions user exclusion rules; must not be null
+   * @param basePath user-defined URL root ignored on both sides before matching; must not be null,
+   *     may be empty
    * @return the report and the list of failures; never null
    */
   public static @NotNull ScanOutput computeScan(
       @NotNull List<ApiEndpoint> endpoints,
       @NotNull List<File> collectionFiles,
-      @NotNull List<ExclusionRule> exclusions) {
-    return computeScan(endpoints, collectionFiles, exclusions, List.of());
+      @NotNull List<ExclusionRule> exclusions,
+      @NotNull String basePath) {
+    return computeScan(endpoints, collectionFiles, exclusions, basePath, List.of());
   }
 
   /**
-   * Same as {@link #computeScan(List, List, List)} appending the given scan issues (e.g. modules
-   * skipped because their index was not ready) to the recorded errors.
+   * Same as {@link #computeScan(List, List, List, String)} appending the given scan issues (e.g.
+   * modules skipped because their index was not ready) to the recorded errors.
    *
    * @param scanIssues issues raised outside the per-collection parsing; must not be null
    */
@@ -104,10 +107,12 @@ public final class CoverageService {
       @NotNull List<ApiEndpoint> endpoints,
       @NotNull List<File> collectionFiles,
       @NotNull List<ExclusionRule> exclusions,
+      @NotNull String basePath,
       @NotNull List<String> scanIssues) {
     Objects.requireNonNull(endpoints);
     Objects.requireNonNull(collectionFiles);
     Objects.requireNonNull(exclusions);
+    Objects.requireNonNull(basePath);
     Objects.requireNonNull(scanIssues);
     List<String> errors = new ArrayList<>(scanIssues);
     List<String> missingPaths = new ArrayList<>();
@@ -117,7 +122,7 @@ public final class CoverageService {
                 collectionFile -> parseCollection(collectionFile, errors, missingPaths).stream())
             .toList();
     return new ScanOutput(
-        CoverageEngine.compute(endpoints, requests, exclusions), errors, missingPaths);
+        CoverageEngine.compute(endpoints, requests, exclusions, basePath), errors, missingPaths);
   }
 
   /**
@@ -302,7 +307,12 @@ public final class CoverageService {
     List<String> scanIssues = new ArrayList<>();
     List<ApiEndpoint> endpoints = collectEndpoints(settings, scanIssues);
     ScanOutput output =
-        computeScan(endpoints, collectionFilesOf(settings), settings.toRules(), scanIssues);
+        computeScan(
+            endpoints,
+            collectionFilesOf(settings),
+            settings.toRules(),
+            settings.getBasePath(),
+            scanIssues);
     lastOutput = output;
     return output.result();
   }

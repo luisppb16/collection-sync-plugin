@@ -18,6 +18,7 @@ import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBList;
+import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
@@ -35,8 +36,8 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Swing settings page that edits {@link EndpointCoverageSettings.State}: the automatic scan on
- * project open, the endpoint source type, the OpenAPI document path, the collection files and the
- * exclusion rules.
+ * project open, the endpoint source type, the OpenAPI document path, the base path ignored on both
+ * sides when matching, the collection files and the exclusion rules.
  *
  * <p>The diff logic (is/apply/reset) goes through the pure {@link
  * EndpointCoverageSettings#equalsState}, comparing the persisted state against the state
@@ -49,6 +50,7 @@ public final class EndpointCoverageConfigurable implements Configurable {
   private ComboBox<EndpointCoverageSettings.SourceType> sourceTypeCombo;
   private JBCheckBox autoScanCheckBox;
   private TextFieldWithBrowseButton openApiField;
+  private JBTextField basePathField;
   private javax.swing.DefaultListModel<String> collectionPathsModel;
   private javax.swing.table.DefaultTableModel exclusionsModel;
   private JPanel mainPanel;
@@ -117,6 +119,8 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 .withTitle(EndpointCoverageBundle.message("settings.openapi.chooser.title"))
                 .withDescription(
                     EndpointCoverageBundle.message("settings.openapi.chooser.description"))));
+    basePathField = new JBTextField();
+    basePathField.setToolTipText(EndpointCoverageBundle.message("settings.base.path.comment"));
 
     collectionPathsModel = new javax.swing.DefaultListModel<>();
     JBList<String> collectionPathsList = new JBList<>(collectionPathsModel);
@@ -164,6 +168,8 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 EndpointCoverageBundle.message("settings.source.type.label"), sourceTypeCombo)
             .addLabeledComponent(
                 EndpointCoverageBundle.message("settings.openapi.label"), openApiField)
+            .addLabeledComponent(
+                EndpointCoverageBundle.message("settings.base.path.label"), basePathField)
             .addComponent(
                 new TitledSeparator(EndpointCoverageBundle.message("settings.collections.title")))
             .addComponent(collectionsPanel)
@@ -190,6 +196,7 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 (EndpointCoverageSettings.SourceType) sourceTypeCombo.getSelectedItem())
             .name();
     state.openApiFilePath = openApiField.getText().strip();
+    state.basePath = basePathField.getText().strip();
     state.collectionFilePaths =
         IntStream.range(0, collectionPathsModel.size())
             .mapToObj(collectionPathsModel::get)
@@ -208,6 +215,7 @@ public final class EndpointCoverageConfigurable implements Configurable {
     autoScanCheckBox.setSelected(state.autoScanOnProjectOpen);
     sourceTypeCombo.setSelectedItem(EndpointCoverageSettings.SourceType.from(state.sourceType));
     openApiField.setText(state.openApiFilePath);
+    basePathField.setText(state.basePath);
     collectionPathsModel.clear();
     state.collectionFilePaths.forEach(collectionPathsModel::addElement);
     exclusionsModel.setRowCount(0);

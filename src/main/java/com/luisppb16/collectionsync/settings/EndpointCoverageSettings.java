@@ -23,7 +23,8 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * Project-level settings of the Endpoint Coverage Tracker: where the endpoints come from, which
- * collection files to parse and which endpoints are always excluded from the report.
+ * collection files to parse, which endpoints are always excluded from the report, and which base
+ * path is ignored on both sides when matching.
  *
  * <p>The state is persisted per project and is always <b>null-safe</b>: every list defaults to
  * empty and every string field defaults to the empty string, both on a fresh project and after
@@ -52,7 +53,7 @@ public final class EndpointCoverageSettings
    * @param first first state; may be null
    * @param second second state; may be null
    * @return true when both are null or every field matches (source type normalized, OpenAPI path
-   *     compared stripped)
+   *     and base path compared stripped)
    */
   public static boolean equalsState(State first, State second) {
     if (first == null || second == null) {
@@ -60,6 +61,7 @@ public final class EndpointCoverageSettings
     }
     return SourceType.from(first.sourceType) == SourceType.from(second.sourceType)
         && first.openApiFilePath.strip().equals(second.openApiFilePath.strip())
+        && first.basePath.strip().equals(second.basePath.strip())
         && first.collectionFilePaths.equals(second.collectionFilePaths)
         && first.exclusions.equals(second.exclusions)
         && first.autoScanOnProjectOpen == second.autoScanOnProjectOpen;
@@ -79,6 +81,7 @@ public final class EndpointCoverageSettings
     State updated = new State();
     updated.sourceType = current.sourceType;
     updated.openApiFilePath = current.openApiFilePath;
+    updated.basePath = current.basePath;
     updated.collectionFilePaths = new ArrayList<>(current.collectionFilePaths);
     updated.exclusions = new ArrayList<>(current.exclusions);
     updated.autoScanOnProjectOpen = current.autoScanOnProjectOpen;
@@ -105,6 +108,7 @@ public final class EndpointCoverageSettings
             : loadedState.sourceType;
     normalizedState.openApiFilePath =
         loadedState.openApiFilePath == null ? "" : loadedState.openApiFilePath;
+    normalizedState.basePath = loadedState.basePath == null ? "" : loadedState.basePath;
     normalizedState.collectionFilePaths =
         new ArrayList<>(
             loadedState.collectionFilePaths == null ? List.of() : loadedState.collectionFilePaths);
@@ -149,6 +153,14 @@ public final class EndpointCoverageSettings
    */
   public String getOpenApiFilePath() {
     return state.openApiFilePath;
+  }
+
+  /**
+   * @return the configured base path (URL root) ignored on both sides before matching; empty when
+   *     unset
+   */
+  public String getBasePath() {
+    return state.basePath;
   }
 
   /**
@@ -265,6 +277,11 @@ public final class EndpointCoverageSettings
 
     /** Absolute or project-relative path of the OpenAPI document; empty when unset. */
     public String openApiFilePath = "";
+
+    /**
+     * URL root (e.g. {@code /api/test/v1}) ignored on both sides before matching; empty when unset.
+     */
+    public String basePath = "";
 
     /** Paths of the collection files (Postman/Insomnia) to parse; never null. */
     public List<String> collectionFilePaths = new ArrayList<>();

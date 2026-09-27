@@ -30,6 +30,10 @@ what is missing and which requests have been left orphaned.
   right-click) recompute coverage.
 - **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS) or `OPEN_API` (local document).
 - **OpenAPI file**: path of the OpenAPI 3.x document (only when the source is `OPEN_API`).
+- **Base path**: URL root (e.g. `/api/test/v1`) ignored on both sides before matching — collections
+  that write `{{baseUrl}}/api/test/v1/carro` and controllers that declare only `/carro` (or the
+  prefix on both sides) still match. A path that does not start with it is left untouched; leave
+  it empty for plain structural matching.
 - **Collection files**: Postman/Insomnia collection files to compare against (add them here or
   from the tool window itself).
 - **Exclusions**: exclusion rules (method + path pattern, e.g. `GET /actuator/{name}`).
