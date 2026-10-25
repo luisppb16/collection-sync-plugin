@@ -12,9 +12,9 @@ import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -29,9 +29,7 @@ import org.jetbrains.annotations.NotNull;
  * IllegalArgumentException}; content that does not even parse fails with an {@link IOException}.
  *
  * <p>{@link #parse(File)} reads the file once and hands the already-parsed tree to the matching
- * parser; {@link #forFile(File)} + {@link CollectionParser#parse(File)} is the composable variant
- * that reads the file twice (once to select the parser, once to parse it), which is fine when the
- * parser instance is kept and reused.
+ * parser, so the content alone decides the format on every call.
  */
 public final class CollectionParsers {
 
@@ -52,22 +50,6 @@ public final class CollectionParsers {
     return switch (formatOf(root)) {
       case POSTMAN -> new PostmanCollectionParser().parseRoot(root, file);
       case INSOMNIA -> new InsomniaCollectionParser().parseRoot(root, file);
-    };
-  }
-
-  /**
-   * Creates the parser for the given collection file.
-   *
-   * @param file collection file to inspect; must not be null
-   * @return the parser matching the file's format; never null
-   * @throws IOException if the file cannot be read or does not parse as JSON nor YAML
-   * @throws IllegalArgumentException if the parsed content follows neither collection format
-   */
-  public static CollectionParser forFile(@NotNull File file) throws IOException {
-    Objects.requireNonNull(file, "file must not be null");
-    return switch (detectFormat(Files.readString(file.toPath()))) {
-      case POSTMAN -> new PostmanCollectionParser();
-      case INSOMNIA -> new InsomniaCollectionParser();
     };
   }
 
@@ -94,6 +76,21 @@ public final class CollectionParsers {
     Objects.requireNonNull(fileName, "fileName must not be null");
     int dot = fileName.lastIndexOf('.');
     return dot <= 0 ? fileName : fileName.substring(0, dot);
+  }
+
+  /**
+   * Returns the collection display name: the stripped {@code name} of the given node when present,
+   * or the file name without its last extension otherwise.
+   *
+   * @param node node carrying the {@code name} property; must not be null
+   * @param file file the node was parsed from; must not be null
+   * @return the display name; never null
+   */
+  static String displayNameOrFileBase(@NotNull JsonNode node, @NotNull File file) {
+    return Optional.ofNullable(node.path("name").asText(null))
+        .map(String::strip)
+        .filter(name -> !name.isEmpty())
+        .orElseGet(() -> fileBaseName(file.getName()));
   }
 
   private static Format formatOf(JsonNode root) {

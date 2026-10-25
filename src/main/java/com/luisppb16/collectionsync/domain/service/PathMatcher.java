@@ -99,11 +99,9 @@ public final class PathMatcher {
     if (prefixSize == 0 || segments.size() < prefixSize) {
       return segments;
     }
-    boolean startsWithPrefix =
-        IntStream.range(0, prefixSize)
-            .allMatch(
-                position -> looseSegment(prefixSegments.get(position), segments.get(position)));
-    return startsWithPrefix ? List.copyOf(segments.subList(prefixSize, segments.size())) : segments;
+    return matches(prefixSegments, segments.subList(0, prefixSize))
+        ? List.copyOf(segments.subList(prefixSize, segments.size()))
+        : segments;
   }
 
   private static boolean looseSegment(Segment first, Segment second) {

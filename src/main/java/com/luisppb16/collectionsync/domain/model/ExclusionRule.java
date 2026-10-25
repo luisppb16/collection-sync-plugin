@@ -7,6 +7,7 @@
 
 package com.luisppb16.collectionsync.domain.model;
 
+import com.luisppb16.collectionsync.domain.service.PathNormalizer;
 import java.util.List;
 
 /**
@@ -34,6 +35,6 @@ public record ExclusionRule(HttpMethod method, String pathPattern) {
 
   /** Normalized segments of {@link #pathPattern}; used for structural matching. */
   public List<Segment> segments() {
-    return com.luisppb16.collectionsync.domain.service.PathNormalizer.normalize(pathPattern);
+    return PathNormalizer.normalize(pathPattern);
   }
 }

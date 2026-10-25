@@ -12,6 +12,7 @@ import com.luisppb16.collectionsync.domain.model.CoverageRow;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -88,8 +89,7 @@ public final class CoverageReportExporter {
     return Stream.of(
             row.status().name(), row.method().name(), row.path(), row.owner(), row.module())
         .map(CoverageReportExporter::csvEscape)
-        .reduce((first, second) -> first + "," + second)
-        .orElse("");
+        .collect(Collectors.joining(","));
   }
 
   /**

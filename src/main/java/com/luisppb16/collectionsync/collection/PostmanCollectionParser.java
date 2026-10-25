@@ -17,9 +17,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -48,15 +46,8 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class PostmanCollectionParser implements CollectionParser {
 
-  private static String collectionName(JsonNode info, File file) {
-    return Optional.ofNullable(info.path("name").asText(null))
-        .map(String::strip)
-        .filter(name -> !name.isEmpty())
-        .orElseGet(() -> CollectionParsers.fileBaseName(file.getName()));
-  }
-
   private static List<ApiRequest> collectRequests(JsonNode items, String collectionName) {
-    return children(items).flatMap(item -> requestsOf(item, collectionName)).toList();
+    return items.valueStream().flatMap(item -> requestsOf(item, collectionName)).toList();
   }
 
   private static Stream<ApiRequest> requestsOf(JsonNode item, String collectionName) {
@@ -96,13 +87,6 @@ public final class PostmanCollectionParser implements CollectionParser {
     return rawUrl.strip();
   }
 
-  private static Stream<JsonNode> children(JsonNode arrayNode) {
-    if (!arrayNode.isArray()) {
-      return Stream.empty();
-    }
-    return StreamSupport.stream(arrayNode.spliterator(), false);
-  }
-
   @Override
   @NotNull
   public List<ApiRequest> parse(@NotNull File file) throws IOException {
@@ -123,7 +107,7 @@ public final class PostmanCollectionParser implements CollectionParser {
       throw new IllegalArgumentException(
           "Not a Postman v2.1 collection: root object must contain 'info' and 'item': " + file);
     }
-    String collectionName = collectionName(root.get("info"), file);
+    String collectionName = CollectionParsers.displayNameOrFileBase(root.get("info"), file);
     return collectRequests(root.get("item"), collectionName);
   }
 }

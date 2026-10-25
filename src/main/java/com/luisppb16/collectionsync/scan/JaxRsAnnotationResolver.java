@@ -7,15 +7,12 @@
 
 package com.luisppb16.collectionsync.scan;
 
-import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifierListOwner;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -54,23 +51,15 @@ public final class JaxRsAnnotationResolver implements EndpointAnnotationResolver
           new FixedMethod("jakarta.ws.rs.OPTIONS", HttpMethod.OPTIONS));
 
   private static String pathValue(PsiModifierListOwner owner) {
-    return findAnnotation(owner, PATH)
+    return EndpointAnnotationResolvers.findAnnotation(owner, PATH)
         .flatMap(path -> EndpointAnnotationResolver.stringValue(path, "value"))
         .orElse("");
-  }
-
-  private static Optional<PsiAnnotation> findAnnotation(
-      PsiModifierListOwner owner, String qualifiedName) {
-    return Stream.ofNullable(owner.getModifierList())
-        .map(modifierList -> modifierList.findAnnotation(qualifiedName))
-        .filter(Objects::nonNull)
-        .findFirst();
   }
 
   @Override
   public boolean isController(@NotNull PsiClass psiClass) {
     Objects.requireNonNull(psiClass);
-    return findAnnotation(psiClass, PATH).isPresent();
+    return EndpointAnnotationResolvers.findAnnotation(psiClass, PATH).isPresent();
   }
 
   @Override
@@ -83,7 +72,10 @@ public final class JaxRsAnnotationResolver implements EndpointAnnotationResolver
   public @NotNull List<HttpMethod> methods(@NotNull PsiMethod psiMethod) {
     Objects.requireNonNull(psiMethod);
     return FIXED_METHODS.stream()
-        .filter(fixedMethod -> findAnnotation(psiMethod, fixedMethod.qualifiedName()).isPresent())
+        .filter(
+            fixedMethod ->
+                EndpointAnnotationResolvers.findAnnotation(psiMethod, fixedMethod.qualifiedName())
+                    .isPresent())
         .map(FixedMethod::httpMethod)
         .toList();
   }

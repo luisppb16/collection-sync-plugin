@@ -12,7 +12,6 @@ import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiEnumConstant;
-import com.intellij.psi.PsiLiteralExpression;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifierListOwner;
 import com.intellij.psi.PsiReferenceExpression;
@@ -21,7 +20,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -127,47 +125,23 @@ public final class SpringAnnotationResolver implements EndpointAnnotationResolve
     if (requestMethodName == null) {
       return Optional.empty();
     }
-    String normalizedName = requestMethodName.strip().toUpperCase(Locale.ROOT);
-    return Arrays.stream(HttpMethod.values())
-        .filter(method -> method.name().equals(normalizedName))
-        .findFirst();
+    try {
+      return Optional.of(HttpMethod.of(requestMethodName));
+    } catch (IllegalArgumentException unsupportedMethod) {
+      return Optional.empty();
+    }
   }
 
   private static String mappingPath(PsiAnnotation mapping) {
-    String value = firstStringValue(mapping, VALUE);
-    return value.isEmpty() ? firstStringValue(mapping, PATH) : value;
-  }
-
-  /**
-   * Reads an annotation member as a string, taking the first element when the member is declared as
-   * an array of any length ({@code @RequestMapping({"/a", "/b"})} yields {@code "/a"}).
-   */
-  private static String firstStringValue(PsiAnnotation annotation, String attribute) {
-    PsiAnnotationMemberValue value = annotation.findAttributeValue(attribute);
-    if (value instanceof PsiArrayInitializerMemberValue array
-        && array.getInitializers().length > 0) {
-      value = array.getInitializers()[0];
-    }
-    if (value instanceof PsiLiteralExpression literal
-        && literal.getValue() instanceof String text) {
-      return text.strip();
-    }
-    return "";
+    String value = EndpointAnnotationResolvers.firstString(mapping, VALUE);
+    return value.isEmpty() ? EndpointAnnotationResolvers.firstString(mapping, PATH) : value;
   }
 
   private static Optional<PsiAnnotation> findAnnotation(
       PsiModifierListOwner owner, String... qualifiedNames) {
     return Arrays.stream(qualifiedNames)
-        .map(qualifiedName -> findAnnotation(owner, qualifiedName))
+        .map(qualifiedName -> EndpointAnnotationResolvers.findAnnotation(owner, qualifiedName))
         .flatMap(Optional::stream)
-        .findFirst();
-  }
-
-  private static Optional<PsiAnnotation> findAnnotation(
-      PsiModifierListOwner owner, String qualifiedName) {
-    return Stream.ofNullable(owner.getModifierList())
-        .map(modifierList -> modifierList.findAnnotation(qualifiedName))
-        .filter(Objects::nonNull)
         .findFirst();
   }
 

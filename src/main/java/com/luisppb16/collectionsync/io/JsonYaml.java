@@ -15,6 +15,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import org.jetbrains.annotations.NotNull;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -62,7 +63,7 @@ public final class JsonYaml {
   private static JsonNode parseYaml(String content, JsonProcessingException jsonError)
       throws IOException {
     try {
-      return toTree(new Yaml().load(content));
+      return toTree(new Yaml(new LoaderOptions()).load(content));
     } catch (RuntimeException yamlError) {
       IOException failure =
           new IOException("Document is neither valid JSON nor valid YAML", jsonError);

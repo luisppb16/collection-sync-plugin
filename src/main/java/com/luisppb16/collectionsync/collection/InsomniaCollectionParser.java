@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -75,10 +74,10 @@ public final class InsomniaCollectionParser implements CollectionParser {
       throw new IllegalArgumentException("Insomnia collection file is empty: " + file);
     }
     if (root.isArray()) {
-      return children(root);
+      return root.valueStream().toList();
     }
     if (root.isObject() && root.hasNonNull("resources") && root.get("resources").isArray()) {
-      return children(root.get("resources"));
+      return root.get("resources").valueStream().toList();
     }
     throw new IllegalArgumentException(
         "Not an Insomnia v4/v5 export: expected a 'resources' array or a bare resource array: "
@@ -120,40 +119,23 @@ public final class InsomniaCollectionParser implements CollectionParser {
         HttpMethod.of(method), rawUrl, resource.path("name").asText(""), collectionName);
   }
 
-  private static List<JsonNode> children(JsonNode arrayNode) {
-    return StreamSupport.stream(arrayNode.spliterator(), false).toList();
-  }
-
   private static List<ApiRequest> parseV5Collection(JsonNode root, File file) {
     JsonNode collection = root.get("collection");
     if (collection == null || !collection.isArray()) {
       throw new IllegalArgumentException(
           "Not an Insomnia v5 collection: expected a 'collection' array: " + file);
     }
-    return collectRequests(collection, v5CollectionName(root, file));
-  }
-
-  private static String v5CollectionName(JsonNode root, File file) {
-    return Optional.ofNullable(root.path("name").asText(null))
-        .map(String::strip)
-        .filter(name -> !name.isEmpty())
-        .orElseGet(() -> CollectionParsers.fileBaseName(file.getName()));
+    return collectRequests(collection, CollectionParsers.displayNameOrFileBase(root, file));
   }
 
   private static List<ApiRequest> collectRequests(JsonNode nodes, String collectionName) {
-    if (!nodes.isArray()) {
-      return List.of();
-    }
-    return children(nodes).stream().flatMap(node -> requestsOf(node, collectionName)).toList();
+    return nodes.valueStream().flatMap(node -> requestsOf(node, collectionName)).toList();
   }
 
   private static Stream<ApiRequest> requestsOf(JsonNode node, String collectionName) {
-    Stream<ApiRequest> own = Stream.ofNullable(toRequest(node, collectionName));
-    JsonNode children = node.get("children");
-    if (children != null && children.isArray()) {
-      return Stream.concat(own, collectRequests(children, collectionName).stream());
-    }
-    return own;
+    return Stream.concat(
+        Stream.ofNullable(toRequest(node, collectionName)),
+        collectRequests(node.path("children"), collectionName).stream());
   }
 
   @Override

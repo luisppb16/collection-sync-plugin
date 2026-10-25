@@ -11,7 +11,10 @@ import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
 import com.intellij.psi.PsiLiteralExpression;
+import com.intellij.psi.PsiModifierListOwner;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
 
 /** Shared PSI helpers for {@link EndpointAnnotationResolver} implementations. */
@@ -48,5 +51,26 @@ final class EndpointAnnotationResolvers {
       return Optional.of(text.strip());
     }
     return Optional.empty();
+  }
+
+  static String firstString(@NotNull PsiAnnotation annotation, @NotNull String attribute) {
+    PsiAnnotationMemberValue value = annotation.findAttributeValue(attribute);
+    if (value instanceof PsiArrayInitializerMemberValue array
+        && array.getInitializers().length > 0) {
+      value = array.getInitializers()[0];
+    }
+    if (value instanceof PsiLiteralExpression literal
+        && literal.getValue() instanceof String text) {
+      return text.strip();
+    }
+    return "";
+  }
+
+  static Optional<PsiAnnotation> findAnnotation(
+      @NotNull PsiModifierListOwner owner, @NotNull String qualifiedName) {
+    return Stream.ofNullable(owner.getModifierList())
+        .map(modifierList -> modifierList.findAnnotation(qualifiedName))
+        .filter(Objects::nonNull)
+        .findFirst();
   }
 }

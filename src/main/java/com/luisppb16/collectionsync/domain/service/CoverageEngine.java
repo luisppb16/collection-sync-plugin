@@ -17,7 +17,9 @@ import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.domain.model.Segment;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -94,10 +96,11 @@ public final class CoverageEngine {
                             endpoint.method(),
                             normalizeAgainstBasePath(endpoint.pathTemplate(), basePathSegments))))
             .toList();
-    List<Shape> excludedShapes =
-        shapes.stream().filter(shape -> isExcludedByRules(shape, rules)).toList();
-    List<Shape> includedShapes =
-        shapes.stream().filter(shape -> !isExcludedByRules(shape, rules)).toList();
+    Map<Boolean, List<Shape>> shapesByExcluded =
+        shapes.stream()
+            .collect(Collectors.partitioningBy(shape -> isExcludedByRules(shape, rules)));
+    List<Shape> excludedShapes = shapesByExcluded.get(Boolean.TRUE);
+    List<Shape> includedShapes = shapesByExcluded.get(Boolean.FALSE);
     List<RequestShape> requestShapes =
         requests.stream()
             .map(

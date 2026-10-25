@@ -94,13 +94,13 @@ class CollectionParsersTest {
 
   @Test
   @DisplayName(
-      "Given YAML content with a .json extension, when forFile is used, then it is detected as Insomnia and parsed")
-  void forFileParsesYamlContentWithJsonExtension() throws IOException, URISyntaxException {
+      "Given YAML content with a .json extension, when the one-shot parse is used, then it is parsed as Insomnia")
+  void parsesYamlContentWithJsonExtension() throws IOException, URISyntaxException {
     String content = fixtureContent("insomnia-v4-sample.yaml");
     Path path = tempDir.resolve("insomnia.json");
     Files.writeString(path, content);
 
-    List<ApiRequest> requests = CollectionParsers.forFile(path.toFile()).parse(path.toFile());
+    List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
 
     assertThat(requests).hasSize(2);
     assertThat(requests.getFirst().collectionName()).isEqualTo("Users API Workspace");
@@ -130,13 +130,13 @@ class CollectionParsersTest {
 
   @Test
   @DisplayName(
-      "Given the Postman fixture file, when forFile is used, then the returned parser collects the requests")
-  void forFileParsesPostmanFixtureEndToEnd() throws IOException, URISyntaxException {
+      "Given the Postman fixture file, when the one-shot parse is used, then the requests are collected")
+  void parsesPostmanFixtureEndToEnd() throws IOException, URISyntaxException {
     URL url = CollectionParsersTest.class.getResource("/collections/postman-v21-sample.json");
     assertThat(url).isNotNull();
     File file = Path.of(url.toURI()).toFile();
 
-    List<ApiRequest> requests = CollectionParsers.forFile(file).parse(file);
+    List<ApiRequest> requests = CollectionParsers.parse(file);
 
     assertThat(requests).hasSize(4);
     assertThat(requests.getFirst().collectionName()).isEqualTo("Users API");
@@ -144,8 +144,8 @@ class CollectionParsersTest {
 
   @Test
   @DisplayName(
-      "Given a Postman .json file, when forFile is used, then the returned parser parses its requests")
-  void forFileReturnsPostmanParser() throws IOException {
+      "Given a Postman .json file, when the one-shot parse is used, then its requests are parsed")
+  void parsesPostmanCollectionFile() throws IOException {
     Path path = tempDir.resolve("collection.json");
     Files.writeString(
         path,
@@ -154,7 +154,7 @@ class CollectionParsersTest {
                   {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
                 ]}""");
 
-    List<ApiRequest> requests = CollectionParsers.forFile(path.toFile()).parse(path.toFile());
+    List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
 
     assertThat(requests).hasSize(1);
     assertThat(requests.getFirst().name()).isEqualTo("Ping");
@@ -162,13 +162,13 @@ class CollectionParsersTest {
 
   @Test
   @DisplayName(
-      "Given an Insomnia .yaml file, when forFile is used, then the returned parser parses its requests")
-  void forFileReturnsInsomniaParser() throws IOException {
+      "Given an Insomnia .yaml file, when the one-shot parse is used, then its requests are parsed")
+  void parsesInsomniaFile() throws IOException {
     Path path = tempDir.resolve("collection.yaml");
     Files.writeString(
         path, "resources:\n  - _type: request\n    name: Ping\n    method: GET\n    url: /ping\n");
 
-    List<ApiRequest> requests = CollectionParsers.forFile(path.toFile()).parse(path.toFile());
+    List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
 
     assertThat(requests).hasSize(1);
     assertThat(requests.getFirst().collectionName()).isEqualTo("collection");
@@ -176,13 +176,13 @@ class CollectionParsersTest {
 
   @Test
   @DisplayName(
-      "Given the Insomnia v5 fixture file, when forFile is used, then the returned parser collects the requests")
-  void forFileParsesInsomniaV5FixtureEndToEnd() throws IOException, URISyntaxException {
+      "Given the Insomnia v5 fixture file, when the one-shot parse is used, then the requests are collected")
+  void parsesInsomniaV5FixtureEndToEnd() throws IOException, URISyntaxException {
     URL url = CollectionParsersTest.class.getResource("/collections/insomnia-v5-sample.yaml");
     assertThat(url).isNotNull();
     File file = Path.of(url.toURI()).toFile();
 
-    List<ApiRequest> requests = CollectionParsers.forFile(file).parse(file);
+    List<ApiRequest> requests = CollectionParsers.parse(file);
 
     assertThat(requests).hasSize(3);
     assertThat(requests.getFirst().name()).isEqualTo("List users");
@@ -190,12 +190,12 @@ class CollectionParsersTest {
   }
 
   @Test
-  @DisplayName("Given an unsupported file, when forFile is used, then it fails fast")
-  void forFileFailsFastOnUnsupportedFile() throws IOException {
+  @DisplayName("Given an unsupported file, when the one-shot parse is used, then it fails fast")
+  void failsFastOnUnsupportedFile() throws IOException {
     Path path = tempDir.resolve("collection.json");
     Files.writeString(path, "{\"foo\": 1}");
 
-    assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.forFile(path.toFile()));
+    assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.parse(path.toFile()));
   }
 
   @Test
@@ -217,11 +217,5 @@ class CollectionParsersTest {
   @DisplayName("Given a null file, when the one-shot parse is used, then it fails fast")
   void parseFailsFastOnNull() {
     assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.parse(null));
-  }
-
-  @Test
-  @DisplayName("Given a null file, when forFile is used, then it fails fast")
-  void forFileFailsFastOnNull() {
-    assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.forFile(null));
   }
 }
