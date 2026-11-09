@@ -46,22 +46,25 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class PostmanCollectionParser implements CollectionParser {
 
+  private static final String REQUEST_NODE = "request";
+  private static final String ITEM_NODE = "item";
+
   private static List<ApiRequest> collectRequests(JsonNode items, String collectionName) {
     return items.valueStream().flatMap(item -> requestsOf(item, collectionName)).toList();
   }
 
   private static Stream<ApiRequest> requestsOf(JsonNode item, String collectionName) {
-    if (item.hasNonNull("request")) {
+    if (item.hasNonNull(REQUEST_NODE)) {
       return Stream.ofNullable(toRequest(item, collectionName));
     }
-    if (item.hasNonNull("item")) {
-      return collectRequests(item.get("item"), collectionName).stream();
+    if (item.hasNonNull(ITEM_NODE)) {
+      return collectRequests(item.get(ITEM_NODE), collectionName).stream();
     }
     return Stream.empty();
   }
 
   private static ApiRequest toRequest(JsonNode item, String collectionName) {
-    JsonNode requestNode = item.get("request");
+    JsonNode requestNode = item.get(REQUEST_NODE);
     JsonNode methodNode = requestNode.path("method");
     if (!methodNode.isMissingNode() && !methodNode.isTextual()) {
       throw new IllegalArgumentException(

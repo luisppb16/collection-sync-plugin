@@ -6,11 +6,14 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
 plugins {
     id 'java'
     id 'org.jetbrains.intellij.platform' version '2.19.0'
     id 'jacoco'
+    id 'pmd'
+    id 'com.diffplug.spotless' version '8.1.0'
 }
 
 group = 'com.luisppb16'
@@ -87,6 +90,21 @@ intellijPlatform {
         ides {
             recommended()
         }
+        failureLevel = [
+            FailureLevel.COMPATIBILITY_WARNINGS,
+            FailureLevel.COMPATIBILITY_PROBLEMS,
+            FailureLevel.DEPRECATED_API_USAGES,
+            FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
+            FailureLevel.EXPERIMENTAL_API_USAGES,
+            FailureLevel.OVERRIDE_ONLY_API_USAGES,
+            FailureLevel.NON_EXTENDABLE_API_USAGES,
+            FailureLevel.PLUGIN_STRUCTURE_WARNINGS,
+            FailureLevel.MISSING_DEPENDENCIES,
+            FailureLevel.INVALID_PLUGIN,
+            FailureLevel.NOT_DYNAMIC
+        ]
+        ignoredProblemsFile.set(layout.projectDirectory.file(
+            "config/pluginVerifier/ignored-problems.txt"))
     }
 }
 
@@ -119,6 +137,24 @@ jacocoTestReport {
         xml.required = true
         html.required = true
     }
+}
+
+check {
+    dependsOn pmdMain, spotlessCheck, jacocoTestReport
+}
+
+spotless {
+    java {
+        googleJavaFormat()
+        importOrder()
+        removeUnusedImports()
+    }
+}
+
+pmd {
+    toolVersion = '7.29.0'
+    ruleSets = []
+    ruleSetFiles = files('config/pmd/ruleset.xml')
 }
 
 // These tasks come from the IntelliJ Platform plugin; guard with findByName so the build script

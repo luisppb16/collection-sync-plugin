@@ -626,11 +626,11 @@ public final class CoveragePanel extends JPanel {
     EXCLUDED("ui.status.excluded", CoverageStatus.EXCLUDED);
 
     private final @NotNull String labelKey;
-    private final @Nullable CoverageStatus status;
+    private final @Nullable CoverageStatus filteredStatus;
 
     StatusFilter(@NotNull String labelKey, @Nullable CoverageStatus status) {
       this.labelKey = labelKey;
-      this.status = status;
+      this.filteredStatus = status;
     }
 
     /**
@@ -638,7 +638,7 @@ public final class CoveragePanel extends JPanel {
      */
     @Nullable
     CoverageStatus status() {
-      return status;
+      return filteredStatus;
     }
 
     @Override

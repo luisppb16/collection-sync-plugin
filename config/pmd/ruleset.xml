@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Copyright (c) 2026 Luis Paolo Pepe Barra (@LuisPPB16).
+  All rights reserved.
+  -->
+<ruleset xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset_2_0_0.xsd"
+         name="CollectionSync production ruleset"
+         description="Real defects and threading hazards.">
+
+    <description>
+        Error-prone and multithreading categories, tuned for an IntelliJ plugin: rules that
+        police J2EE/server environments or style-level concerns that Spotless (Google Format)
+        already owns are excluded with a justification per exclusion.
+    </description>
+
+    <rule ref="category/java/errorprone.xml">
+        <!-- Catching Exception is the platform-wide degrade-graceful behavior of every networked
+             adapter (OSV, Maven Central, parser): a lookup failure must never abort the scan. -->
+        <exclude name="AvoidCatchingGenericException"/>
+        <!-- Sentinel null returns are used by the severity/fixed-version resolution pipeline by
+             contract ("null means cannot be checked; callers must stay silent"). -->
+        <exclude name="NullAssignment"/>
+        <exclude name="ReturnEmptyCollectionRatherThanNull"/>
+        <!-- Reference identity on scan futures/maps is intentional: same-instance semantics. -->
+        <exclude name="CompareObjectsWithEquals"/>
+        <!-- Magic numbers in severity/CSS-pixel parsing; readability handled at call sites. -->
+        <exclude name="AvoidLiteralsInIfCondition"/>
+    </rule>
+    <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
+        <!-- Unnamed-variable catches with a fall-through comment are the documented pattern for
+             best-effort parsing (e.g. malformed CVSS vector → plain-number fallback). -->
+        <properties>
+            <property name="allowCommentedBlocks" value="true"/>
+            <property name="allowExceptionNameRegex" value="^(_|e)$"/>
+        </properties>
+    </rule>
+    <rule ref="category/java/multithreading.xml">
+        <!-- Threading-hazard exclusions live here since PMD 7: the rules moved out of the
+             errorprone category, so referencing them under errorprone no longer matches (PMD
+             7.29.0 also rejects excludes on single-rule references). -->
+        <exclude name="AvoidUsingVolatile"/>
+        <exclude name="UseConcurrentHashMap"/>
+        <exclude name="DoNotUseThreads"/>
+        <exclude name="UnsynchronizedStaticFormatter"/>
+        <!-- The plugin is an IDE extension, not a J2EE webapp; the platform pool is the sanctioned
+             threading model. -->
+        <exclude name="AvoidSynchronizedAtMethodLevel"/>
+    </rule>
+</ruleset>
