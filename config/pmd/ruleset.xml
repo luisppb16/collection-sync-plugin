@@ -27,6 +27,14 @@
         <exclude name="CompareObjectsWithEquals"/>
         <!-- Magic numbers in severity/CSS-pixel parsing; readability handled at call sites. -->
         <exclude name="AvoidLiteralsInIfCondition"/>
+        <!-- Test fixtures repeat their Given/When/Then data literals on purpose; lifting them into
+             constants only to satisfy a threshold is churn for no defect, Spotless keeps the files
+             readable. -->
+        <exclude name="AvoidDuplicateLiterals"/>
+        <!-- Plugin resources must be reached through the plugin class loader; the J2EE thread
+             context-loader rule does not apply to IntelliJ extensions (the resource bundle and the
+             PSI test fixtures read the plugin classpath by their own class loader). -->
+        <exclude name="UseProperClassLoader"/>
     </rule>
     <rule ref="category/java/errorprone.xml/EmptyCatchBlock">
         <!-- Unnamed-variable catches with a fall-through comment are the documented pattern for

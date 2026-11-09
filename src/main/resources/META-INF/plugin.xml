@@ -10,7 +10,7 @@
     <name>CollectionSync</name>
     <vendor email="ironkrozz@gmail.com" url="https://github.com/luisppb16">Luis Pepe</vendor>
 
-    <idea-version since-build="262"/>
+    <idea-version since-build="263"/>
 
     <!--
       The description and change-notes are intentionally kept in English: they are consumed by the

@@ -10,7 +10,7 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLeve
 
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij.platform' version '2.19.0'
+    id 'org.jetbrains.intellij.platform' version '2.20.1'
     id 'jacoco'
     id 'pmd'
     id 'com.diffplug.spotless' version '8.1.0'
@@ -28,14 +28,14 @@ repositories {
 
 dependencies {
     // JSON/YAML - Jackson (collections Postman v2.1 e Insomnia v4/v5)
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.22.4'
-    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.22.4'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.23.0'
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.23.0'
     // Declared explicitly: JsonYaml drives SnakeYAML directly to expand YAML aliases/merge keys
     // (Jackson's YAML parser keeps them as raw text).
     implementation 'org.yaml:snakeyaml:2.7'
 
     // Instance factory for tests
-    testImplementation 'org.instancio:instancio-junit:6.1.0'
+    testImplementation 'org.instancio:instancio-junit:6.2.1'
 
     // Testing
     // JUnit 4 is kept on the test classpath because the IntelliJ Platform test framework
@@ -47,8 +47,14 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.1.3'
 
+    constraints {
+        testImplementation('org.apache.commons:commons-compress:1.28.0') {
+            because 'avoid CVEs in the transitive test classpath'
+        }
+    }
+
     intellijPlatform {
-        intellijIdea '2026.2'
+        intellijIdea '2026.3'
         bundledPlugin 'com.intellij.java'
         // IntelliJ Platform test framework (BasePlatformTestCase) for PSI-level tests.
         // Groovy does not auto-resolve Kotlin objects, so INSTANCE must be used explicitly.
