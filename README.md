@@ -124,6 +124,17 @@ exception messages (fail-fast) are developer-facing and stay in English as well.
 - **Micronaut** (`@Controller`, `@Get`…).
 - **Swagger 2.0** (OpenAPI 3.x only).
 
+## 📝 Changelog
+
+### 1.0.5
+
+- **Build/compatibility release**: targets **IntelliJ IDEA 2026.3** (`since-build 263`), so the
+  minimum supported IDE is now 2026.3 (users of 2026.2 should keep using 1.0.4).
+- **Build tooling**: PMD and Spotless (Google Java Format) checks wired into `check`, and the
+  plugin verifier enforces the strict failure level against the recommended IDEs.
+- **Dependencies**: Jackson 2.22.4 → 2.23.0 (JSON and YAML), Instancio 6.1.0 → 6.2.1, and a
+  `commons-compress` 1.28.0 constraint over the test classpath (CVE hygiene).
+
 ---
 
 Copyright (c) 2026 Luis Paolo Pepe Barra (@LuisPPB16). All rights reserved.
