@@ -89,7 +89,7 @@ editor; when the source is `OPEN_API`, the configured document opens.
 ./gradlew runIde        # launches a sandbox IDE with the plugin installed
 ```
 
-Requires JDK 21+ (the project compiles with the Java 25 toolchain) and IntelliJ IDEA 2026.2+.
+Requires JDK 21+ (the project compiles with the Java 25 toolchain) and IntelliJ IDEA 2026.3+.
 
 ## Languages
 
