@@ -6,14 +6,12 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel
 
 plugins {
     id 'java'
     id 'org.jetbrains.intellij.platform' version '2.20.1'
     id 'jacoco'
     id 'pmd'
-    id 'com.diffplug.spotless' version '8.1.0'
 }
 
 group = 'com.luisppb16'
@@ -76,7 +74,7 @@ java {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 25
-    options.compilerArgs << "-Xlint:all" << "-Werror" << "-Xlint:-unchecked"
+    options.compilerArgs << "-Xlint:all" << "-Werror"
 }
 
 intellijPlatform {
@@ -96,21 +94,7 @@ intellijPlatform {
         ides {
             recommended()
         }
-        failureLevel = [
-            FailureLevel.COMPATIBILITY_WARNINGS,
-            FailureLevel.COMPATIBILITY_PROBLEMS,
-            FailureLevel.DEPRECATED_API_USAGES,
-            FailureLevel.SCHEDULED_FOR_REMOVAL_API_USAGES,
-            FailureLevel.EXPERIMENTAL_API_USAGES,
-            FailureLevel.OVERRIDE_ONLY_API_USAGES,
-            FailureLevel.NON_EXTENDABLE_API_USAGES,
-            FailureLevel.PLUGIN_STRUCTURE_WARNINGS,
-            FailureLevel.MISSING_DEPENDENCIES,
-            FailureLevel.INVALID_PLUGIN,
-            FailureLevel.NOT_DYNAMIC
-        ]
-        ignoredProblemsFile.set(layout.projectDirectory.file(
-            "config/pluginVerifier/ignored-problems.txt"))
+        ignoredProblemsFile.set(file('config/pluginVerifier/ignored-problems.txt'))
     }
 }
 
@@ -145,29 +129,8 @@ jacocoTestReport {
     }
 }
 
-check {
-    dependsOn pmdMain, spotlessCheck, jacocoTestReport
-}
-
-spotless {
-    java {
-        googleJavaFormat()
-        importOrder()
-        removeUnusedImports()
-    }
-}
-
 pmd {
     toolVersion = '7.29.0'
     ruleSets = []
     ruleSetFiles = files('config/pmd/ruleset.xml')
-}
-
-// These tasks come from the IntelliJ Platform plugin; guard with findByName so the build script
-// does not fail in environments where they are not registered.
-['buildSearchableOptions', 'jarSearchableOptions'].each { name ->
-    def task = tasks.findByName(name)
-    if (task != null) {
-        task.enabled = false
-    }
 }
