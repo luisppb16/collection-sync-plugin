@@ -10,8 +10,10 @@ package com.luisppb16.collectionsync.collection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
+import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -150,9 +152,10 @@ class CollectionParsersTest {
     Files.writeString(
         path,
         """
-                {"info": {"name": "X"}, "item": [
-                  {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
-                ]}""");
+        {"info": {"name": "X"}, "item": [
+          {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
+        ]}\
+        """);
 
     List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
 
@@ -211,6 +214,99 @@ class CollectionParsersTest {
     assertThat(requests).hasSize(3);
     assertThat(requests.getFirst().name()).isEqualTo("List users");
     assertThat(requests.getFirst().collectionName()).isEqualTo("Users API v5");
+  }
+
+  @Test
+  @DisplayName(
+      "Given an OpenAPI 3.x document, when it is used as a collection, then every operation becomes a request")
+  void parsesOpenApiDocumentAsCollection() throws IOException {
+    Path path = tempDir.resolve("openapi.json");
+    Files.writeString(
+        path,
+        """
+        {"openapi": "3.0.0", "info": {"title": "OpenAPI API", "version": "1.0"},
+         "paths": {
+           "/users": {"get": {"operationId": "listUsers"}, "post": {"summary": "Create user"}},
+           "/health": {"trace": {}}}}\
+        """);
+
+    List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
+
+    assertThat(requests)
+        .extracting(ApiRequest::name, ApiRequest::rawUrl, ApiRequest::method)
+        .containsExactly(
+            tuple("listUsers", "/users", HttpMethod.GET),
+            tuple("Create user", "/users", HttpMethod.POST),
+            tuple("TRACE /health", "/health", HttpMethod.TRACE));
+    assertThat(requests)
+        .allSatisfy(request -> assertThat(request.collectionName()).isEqualTo("OpenAPI API"));
+    assertThat(CollectionParsers.detectFormat(Files.readString(path)))
+        .isEqualTo(CollectionParsers.Format.OPEN_API);
+  }
+
+  @Test
+  @DisplayName(
+      "Given a Postman collection with variables, when it is parsed, then known variables are resolved")
+  void resolvesPostmanCollectionVariables() throws IOException {
+    Path path = tempDir.resolve("postman-vars.json");
+    Files.writeString(
+        path,
+        """
+        {"info": {"name": "Vars"}, "variable": [
+           {"key": "baseUrl", "value": "https://api.example.com"},
+           {"key": "version", "value": "v1"}],
+         "item": [
+           {"name": "Ping", "request": {"method": "GET", "url": "{{baseUrl}}/{{version}}/ping"}},
+           {"name": "Unknown", "request": {"method": "GET", "url": "{{baseUrl}}/{{response.body.id}}"}}
+         ]}\
+        """);
+
+    List<ApiRequest> requests = CollectionParsers.parse(path.toFile());
+
+    assertThat(requests)
+        .extracting(ApiRequest::name, ApiRequest::rawUrl)
+        .containsExactly(
+            tuple("Ping", "https://api.example.com/v1/ping"),
+            tuple("Unknown", "https://api.example.com/{{response.body.id}}"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given Insomnia environments with one or several values, when parsed, then only unique variables are resolved")
+  void resolvesOnlyUnambiguousInsomniaEnvironmentVariables() throws IOException {
+    Path unique = tempDir.resolve("insomnia-unique.yaml");
+    Files.writeString(
+        unique,
+        """
+        resources:
+          - _type: environment
+            data: {base_url: "https://api.example.com"}
+          - _type: request
+            name: Ping
+            method: GET
+            url: "{{ _.base_url }}/ping"
+        """);
+    Path ambiguous = tempDir.resolve("insomnia-ambiguous.yaml");
+    Files.writeString(
+        ambiguous,
+        """
+        resources:
+          - _type: environment
+            data: {base_url: "https://a.example.com"}
+          - _type: environment
+            data: {base_url: "https://b.example.com"}
+          - _type: request
+            name: Ping
+            method: GET
+            url: "{{ _.base_url }}/ping"
+        """);
+
+    assertThat(CollectionParsers.parse(unique.toFile()))
+        .extracting(ApiRequest::rawUrl)
+        .containsExactly("https://api.example.com/ping");
+    assertThat(CollectionParsers.parse(ambiguous.toFile()))
+        .extracting(ApiRequest::rawUrl)
+        .containsExactly("{{ _.base_url }}/ping");
   }
 
   @Test

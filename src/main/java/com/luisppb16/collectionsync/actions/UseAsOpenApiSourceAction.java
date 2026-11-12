@@ -55,11 +55,10 @@ public final class UseAsOpenApiSourceAction extends AnAction {
 
   private static void applySource(@NotNull Project project, @NotNull String absolutePath) {
     EndpointCoverageSettings settings = EndpointCoverageSettings.getInstance(project);
-    EndpointCoverageSettings.State updated =
-        EndpointCoverageSettings.copyForUpdate(settings.getState());
-    updated.openApiFilePath = absolutePath;
-    updated.sourceType = EndpointCoverageSettings.SourceType.OPEN_API.name();
-    settings.setState(updated);
+    settings.update(updated -> {
+      updated.openApiFilePath = absolutePath;
+      updated.sourceType = EndpointCoverageSettings.SourceType.OPEN_API.name();
+    });
   }
 
   /**
@@ -90,12 +89,7 @@ public final class UseAsOpenApiSourceAction extends AnAction {
    */
   @Override
   public void update(@NotNull AnActionEvent event) {
-    Project project = event.getProject();
-    event
-        .getPresentation()
-        .setEnabledAndVisible(
-            project != null
-                && ActionFiles.isSupportedFile(event.getData(CommonDataKeys.VIRTUAL_FILE)));
+    ActionFiles.setEnabledForSupportedFile(event);
   }
 
   /**

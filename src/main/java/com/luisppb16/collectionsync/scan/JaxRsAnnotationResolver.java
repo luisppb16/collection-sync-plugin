@@ -7,84 +7,55 @@
 
 package com.luisppb16.collectionsync.scan;
 
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifierListOwner;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import java.util.List;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * {@link EndpointAnnotationResolver} for JAX-RS ({@code jakarta.ws.rs}) resources.
- *
- * <p>All lookups are done by annotation qualified name on the PSI modifier list, so the resolver
- * works even when the JAX-RS annotations are declared as stubs and cannot be resolved to their
- * declaring classes.
- *
- * <ul>
- *   <li><b>isController:</b> the class carries {@code @Path}.
- *   <li><b>basePath:</b> {@code value} of the class-level {@code @Path}, or {@code ""} when absent
- *       (cannot happen for a class accepted by {@link #isController(PsiClass)}).
- *   <li><b>methods:</b> {@code @GET}, {@code @POST}, {@code @PUT}, {@code @DELETE}, {@code @PATCH},
- *       {@code @HEAD} and {@code @OPTIONS} each declare one fixed HTTP method.
- *   <li><b>methodPath:</b> {@code value} of the method-level {@code @Path}, or {@code ""} when
- *       absent.
- * </ul>
- *
- * <p><b>Out of scope:</b> sub-resource locators (methods returning a resource class instead of a
- * response, annotated with {@code @Path} but with no HTTP verb annotation) produce no endpoints:
- * the endpoints they expose are only known at runtime from the returned sub-resource.
+ * {@link EndpointAnnotationResolver} for JAX-RS resources. It is instantiated once per namespace
+ * ({@code jakarta.ws.rs} and {@code javax.ws.rs}) so both generations are detected.
  */
-public final class JaxRsAnnotationResolver implements EndpointAnnotationResolver {
+public final class JaxRsAnnotationResolver extends FixedVerbResolver {
 
-  private static final String PATH = "jakarta.ws.rs.Path";
+  private static final String DEFAULT_NAMESPACE = "jakarta.ws.rs";
 
-  private static final List<FixedMethod> FIXED_METHODS =
-      List.of(
-          new FixedMethod("jakarta.ws.rs.GET", HttpMethod.GET),
-          new FixedMethod("jakarta.ws.rs.POST", HttpMethod.POST),
-          new FixedMethod("jakarta.ws.rs.PUT", HttpMethod.PUT),
-          new FixedMethod("jakarta.ws.rs.DELETE", HttpMethod.DELETE),
-          new FixedMethod("jakarta.ws.rs.PATCH", HttpMethod.PATCH),
-          new FixedMethod("jakarta.ws.rs.HEAD", HttpMethod.HEAD),
-          new FixedMethod("jakarta.ws.rs.OPTIONS", HttpMethod.OPTIONS));
-
-  private static String pathValue(PsiModifierListOwner owner) {
-    return EndpointAnnotationResolvers.findAnnotation(owner, PATH)
-        .flatMap(path -> EndpointAnnotationResolver.stringValue(path, "value"))
-        .orElse("");
+  public JaxRsAnnotationResolver() {
+    this(DEFAULT_NAMESPACE);
   }
 
-  @Override
-  public boolean isController(@NotNull PsiClass psiClass) {
-    Objects.requireNonNull(psiClass);
-    return EndpointAnnotationResolvers.findAnnotation(psiClass, PATH).isPresent();
+  /**
+   * @param namespace annotation package, e.g. {@code jakarta.ws.rs} or {@code javax.ws.rs}; must
+   *     not be null or blank
+   */
+  public JaxRsAnnotationResolver(@NotNull String namespace) {
+    super(
+        List.of(pathAnnotation(namespace)),
+        List.of(pathAnnotation(namespace)),
+        fixedMethods(namespace));
   }
 
-  @Override
-  public @NotNull String basePath(@NotNull PsiClass psiClass) {
-    Objects.requireNonNull(psiClass);
-    return pathValue(psiClass);
+  private static String pathAnnotation(String namespace) {
+    return normalized(namespace) + ".Path";
   }
 
-  @Override
-  public @NotNull List<HttpMethod> methods(@NotNull PsiMethod psiMethod) {
-    Objects.requireNonNull(psiMethod);
-    return FIXED_METHODS.stream()
-        .filter(
-            fixedMethod ->
-                EndpointAnnotationResolvers.findAnnotation(psiMethod, fixedMethod.qualifiedName())
-                    .isPresent())
-        .map(FixedMethod::httpMethod)
-        .toList();
+  private static List<FixedVerb> fixedMethods(String namespace) {
+    String prefix = normalized(namespace);
+    return List.of(
+        new FixedVerb(prefix + ".GET", HttpMethod.GET),
+        new FixedVerb(prefix + ".POST", HttpMethod.POST),
+        new FixedVerb(prefix + ".PUT", HttpMethod.PUT),
+        new FixedVerb(prefix + ".DELETE", HttpMethod.DELETE),
+        new FixedVerb(prefix + ".PATCH", HttpMethod.PATCH),
+        new FixedVerb(prefix + ".HEAD", HttpMethod.HEAD),
+        new FixedVerb(prefix + ".OPTIONS", HttpMethod.OPTIONS));
   }
 
-  @Override
-  public @NotNull String methodPath(@NotNull PsiMethod psiMethod) {
-    Objects.requireNonNull(psiMethod);
-    return pathValue(psiMethod);
+  private static String normalized(String namespace) {
+    String resolved = Objects.requireNonNull(namespace, "namespace must not be null").strip();
+    if (resolved.isEmpty()) {
+      throw new IllegalArgumentException("namespace must not be blank");
+    }
+    return resolved;
   }
-
-  private record FixedMethod(String qualifiedName, HttpMethod httpMethod) {}
 }

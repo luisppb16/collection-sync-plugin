@@ -29,10 +29,10 @@ public final class CoverageTableModel extends AbstractTableModel {
   /** Column indexes, shared by the panel when wiring renderers and comparators. */
   public static final int STATUS_COLUMN = 0;
 
-  public static final int METHOD_COLUMN = 1;
-  public static final int PATH_COLUMN = 2;
-  public static final int OWNER_COLUMN = 3;
-  public static final int MODULE_COLUMN = 4;
+  private static final int METHOD_COLUMN = 1;
+  private static final int PATH_COLUMN = 2;
+  private static final int OWNER_COLUMN = 3;
+  private static final int MODULE_COLUMN = 4;
 
   private static final int COLUMN_COUNT = 5;
 
@@ -89,11 +89,6 @@ public final class CoverageTableModel extends AbstractTableModel {
   @Override
   public @NotNull Class<?> getColumnClass(int columnIndex) {
     return columnIndex == STATUS_COLUMN ? CoverageStatus.class : String.class;
-  }
-
-  @Override
-  public boolean isCellEditable(int rowIndex, int columnIndex) {
-    return false;
   }
 
   @Override

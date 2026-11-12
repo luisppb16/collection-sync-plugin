@@ -62,85 +62,100 @@ class ControllerEndpointSourceTest extends PsiTestCase {
           JAX_RS_PACKAGE + " public @interface HEAD { }",
           JAX_RS_PACKAGE + " public @interface OPTIONS { }");
 
+  private static final List<String> JAVAX_RS_STUBS =
+      List.of(
+          "package javax.ws.rs; public @interface Path { String value(); }",
+          "package javax.ws.rs; public @interface GET { }",
+          "package javax.ws.rs; public @interface POST { }");
+
+  private static final List<String> MICRONAUT_STUBS =
+      List.of(
+          "package io.micronaut.http.annotation;"
+              + " public @interface Controller { String[] value() default {}; }",
+          "package io.micronaut.http.annotation;"
+              + " public @interface Get { String[] value() default {}; }",
+          "package io.micronaut.http.annotation;"
+              + " public @interface Post { String[] value() default {}; }");
+
   private static final String SPRING_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            @org.springframework.web.bind.annotation.RestController
-            @org.springframework.web.bind.annotation.RequestMapping("/api")
-            public class UserController {
+      @org.springframework.web.bind.annotation.RestController
+      @org.springframework.web.bind.annotation.RequestMapping("/api")
+      public class UserController {
 
-                @org.springframework.web.bind.annotation.GetMapping("/users/{id}")
-                public java.lang.String getUser(long id) {
-                    return null;
-                }
+          @org.springframework.web.bind.annotation.GetMapping("/users/{id}")
+          public java.lang.String getUser(long id) {
+              return null;
+          }
 
-                @org.springframework.web.bind.annotation.PostMapping("/users")
-                public java.lang.String createUser() {
-                    return null;
-                }
+          @org.springframework.web.bind.annotation.PostMapping("/users")
+          public java.lang.String createUser() {
+              return null;
+          }
 
-                @org.springframework.web.bind.annotation.RequestMapping(value = "/users/{id}",
-                        method = org.springframework.web.bind.annotation.RequestMethod.PUT)
-                public java.lang.String updateUser(long id) {
-                    return null;
-                }
+          @org.springframework.web.bind.annotation.RequestMapping(value = "/users/{id}",
+                  method = org.springframework.web.bind.annotation.RequestMethod.PUT)
+          public java.lang.String updateUser(long id) {
+              return null;
+          }
 
-                private void validateRequest() {
-                }
-            }
-            """;
+          private void validateRequest() {
+          }
+      }
+      """;
 
   private static final String SPRING_CONTROLLER_WITH_SLASH_EDGE_CASES =
       """
-            package com.example;
+      package com.example;
 
-            @org.springframework.web.bind.annotation.RestController
-            @org.springframework.web.bind.annotation.RequestMapping("/api/")
-            public class ItemController {
+      @org.springframework.web.bind.annotation.RestController
+      @org.springframework.web.bind.annotation.RequestMapping("/api/")
+      public class ItemController {
 
-                @org.springframework.web.bind.annotation.GetMapping("/items")
-                public java.lang.String listItems() {
-                    return null;
-                }
+          @org.springframework.web.bind.annotation.GetMapping("/items")
+          public java.lang.String listItems() {
+              return null;
+          }
 
-                @org.springframework.web.bind.annotation.PostMapping
-                public java.lang.String createItem() {
-                    return null;
-                }
-            }
-            """;
+          @org.springframework.web.bind.annotation.PostMapping
+          public java.lang.String createItem() {
+              return null;
+          }
+      }
+      """;
 
   private static final String JAX_RS_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            @jakarta.ws.rs.Path("/orders")
-            public class OrderResource {
+      @jakarta.ws.rs.Path("/orders")
+      public class OrderResource {
 
-                @jakarta.ws.rs.GET
-                public java.lang.String listOrders() {
-                    return null;
-                }
+          @jakarta.ws.rs.GET
+          public java.lang.String listOrders() {
+              return null;
+          }
 
-                @jakarta.ws.rs.POST
-                @jakarta.ws.rs.Path("/{orderId}")
-                public java.lang.String createOrder() {
-                    return null;
-                }
-            }
-            """;
+          @jakarta.ws.rs.POST
+          @jakarta.ws.rs.Path("/{orderId}")
+          public java.lang.String createOrder() {
+              return null;
+          }
+      }
+      """;
 
   private static final String NON_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            public class PlainService {
+      public class PlainService {
 
-                public void doWork() {
-                }
-            }
-            """;
+          public void doWork() {
+          }
+      }
+      """;
 
   private Module module;
 
@@ -175,11 +190,10 @@ class ControllerEndpointSourceTest extends PsiTestCase {
             tuple(HttpMethod.GET, "/orders"),
             tuple(HttpMethod.POST, "/orders/{orderId}"));
     assertThat(endpoints)
-        .allSatisfy(
-            endpoint -> {
-              assertThat(endpoint.moduleName()).isEqualTo(module.getName());
-              assertThat(endpoint.psiMethod()).isNotNull();
-            });
+        .allSatisfy(endpoint -> {
+          assertThat(endpoint.moduleName()).isEqualTo(module.getName());
+          assertThat(endpoint.psiMethod()).isNotNull();
+        });
   }
 
   @Test
@@ -194,10 +208,9 @@ class ControllerEndpointSourceTest extends PsiTestCase {
 
     ApiEndpoint getUserEndpoint =
         endpoints.stream()
-            .filter(
-                endpoint ->
-                    "/api/users/{id}".equals(endpoint.pathTemplate())
-                        && HttpMethod.GET.equals(endpoint.method()))
+            .filter(endpoint ->
+                "/api/users/{id}".equals(endpoint.pathTemplate())
+                    && HttpMethod.GET.equals(endpoint.method()))
             .findFirst()
             .orElseThrow();
     assertThat(getUserEndpoint.ownerClass()).isEqualTo("com.example.UserController");
@@ -239,6 +252,136 @@ class ControllerEndpointSourceTest extends PsiTestCase {
     assertThat(endpoints).isEmpty();
   }
 
+  @Test
+  @DisplayName(
+      "Given mappings with several paths and no verb, when endpoints are collected, then every combination is produced")
+  void expandsEveryPathAndWildcardMethod() {
+    addClass(
+        """
+        package com.example;
+
+        @org.springframework.web.bind.annotation.RestController
+        @org.springframework.web.bind.annotation.RequestMapping({"/api", "/v2"})
+        public class MultiController {
+
+            @org.springframework.web.bind.annotation.GetMapping({"/a", "/b"})
+            public java.lang.String multi() {
+                return null;
+            }
+
+            @org.springframework.web.bind.annotation.RequestMapping("/any")
+            public java.lang.String any() {
+                return null;
+            }
+        }
+        """);
+
+    List<ApiEndpoint> endpoints =
+        sorted(
+            new ControllerEndpointSource(List.of(new SpringAnnotationResolver()))
+                .collect(getFixture().getProject()));
+
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .contains(
+            tuple(HttpMethod.GET, "/api/a"),
+            tuple(HttpMethod.GET, "/api/b"),
+            tuple(HttpMethod.GET, "/v2/a"),
+            tuple(HttpMethod.GET, "/v2/b"),
+            tuple(HttpMethod.ANY, "/api/any"),
+            tuple(HttpMethod.ANY, "/v2/any"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given javax.ws.rs and Micronaut resources, when endpoints are collected, then both are detected")
+  void detectsJavaxRsAndMicronautControllers() {
+    JAVAX_RS_STUBS.forEach(this::addClass);
+    MICRONAUT_STUBS.forEach(this::addClass);
+    addClass(
+        """
+        package com.example;
+
+        @javax.ws.rs.Path("/legacy")
+        public class LegacyResource {
+
+            @javax.ws.rs.GET
+            public java.lang.String list() {
+                return null;
+            }
+        }
+        """);
+    addClass(
+        """
+        package com.example;
+
+        @io.micronaut.http.annotation.Controller("/micro")
+        public class MicroController {
+
+            @io.micronaut.http.annotation.Get("/items")
+            public java.lang.String items() {
+                return null;
+            }
+        }
+        """);
+
+    List<ApiEndpoint> endpoints =
+        sorted(
+            new ControllerEndpointSource(
+                    List.of(
+                        new JaxRsAnnotationResolver("javax.ws.rs"),
+                        new MicronautAnnotationResolver()))
+                .collect(getFixture().getProject()));
+
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .contains(tuple(HttpMethod.GET, "/legacy"), tuple(HttpMethod.GET, "/micro/items"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given a composed annotation meta-annotated with a Spring mapping, when endpoints are collected, then it is detected")
+  void detectsComposedAnnotations() {
+    addClass(
+        """
+        package com.example;
+
+        @org.springframework.web.bind.annotation.RestController
+        public @interface ApiController { }
+        """);
+    addClass(
+        """
+        package com.example;
+
+        @org.springframework.web.bind.annotation.GetMapping
+        public @interface ApiGet {
+            String value() default "";
+        }
+        """);
+    addClass(
+        """
+        package com.example;
+
+        @com.example.ApiController
+        public class ComposedController {
+
+            @com.example.ApiGet("/composed")
+            public java.lang.String composed() {
+                return null;
+            }
+        }
+        """);
+
+    List<ApiEndpoint> endpoints =
+        sorted(
+            new ControllerEndpointSource(List.of(new SpringAnnotationResolver()))
+                .collect(getFixture().getProject()));
+
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .contains(tuple(HttpMethod.GET, "/composed"));
+  }
+
   private void addClass(String source) {
     getFixture().addClass(source);
   }
@@ -264,8 +407,8 @@ class ControllerEndpointSourceTest extends PsiTestCase {
     }
 
     @Override
-    public String basePath(PsiClass psiClass) {
-      return "";
+    public List<String> basePaths(PsiClass psiClass) {
+      return List.of("");
     }
 
     @Override
@@ -274,8 +417,8 @@ class ControllerEndpointSourceTest extends PsiTestCase {
     }
 
     @Override
-    public String methodPath(PsiMethod psiMethod) {
-      return "";
+    public List<String> methodPaths(PsiMethod psiMethod) {
+      return List.of();
     }
   }
 }

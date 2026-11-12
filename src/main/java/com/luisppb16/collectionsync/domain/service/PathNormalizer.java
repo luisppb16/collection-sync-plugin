@@ -10,10 +10,8 @@ package com.luisppb16.collectionsync.domain.service;
 import com.luisppb16.collectionsync.domain.model.Segment;
 import com.luisppb16.collectionsync.domain.model.Segment.Literal;
 import com.luisppb16.collectionsync.domain.model.Segment.Variable;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * Converts a raw path or URL into the list of {@link Segment}s used by the matching engine.
@@ -62,6 +60,7 @@ public final class PathNormalizer {
   private static final Pattern BRACES =
       Pattern.compile("^\\{\\s*([^{}\\s]+)\\s*(?::\\s*([^{}]*)\\s*)?}$");
   private static final Pattern COLON = Pattern.compile("^:[A-Za-z_][A-Za-z0-9_-]*$");
+  private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
   private PathNormalizer() {}
 
@@ -80,12 +79,12 @@ public final class PathNormalizer {
     if (path.isEmpty()) {
       return List.of();
     }
-    List<String> rawSegments = new ArrayList<>(List.of(path.split("/")));
+    List<String> rawSegments = List.of(path.split("/"));
     boolean hostLikeVariable =
         !path.startsWith("/") && rawSegments.size() > 1 && isVariable(rawSegments.getFirst());
-    return Stream.ofNullable(
-            hostLikeVariable ? rawSegments.subList(1, rawSegments.size()) : rawSegments)
-        .flatMap(List::stream)
+    List<String> segments =
+        hostLikeVariable ? rawSegments.subList(1, rawSegments.size()) : rawSegments;
+    return segments.stream()
         .filter(segment -> !segment.isEmpty())
         .map(PathNormalizer::classify)
         .toList();
@@ -117,7 +116,7 @@ public final class PathNormalizer {
     if (isVariable(rawSegment)) {
       // the syntax is kept for display only; inner whitespace is stripped so that
       // "{ id }" and "{id}" are indistinguishable
-      return new Variable(rawSegment.replaceAll("\\s+", ""));
+      return new Variable(WHITESPACE.matcher(rawSegment).replaceAll(""));
     }
     return new Literal(rawSegment);
   }

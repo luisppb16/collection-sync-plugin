@@ -60,10 +60,14 @@ class InsomniaCollectionParserTest {
         .containsExactly(
             tuple(
                 "List users",
-                "{{ _.base_url }}/users?include=roles",
+                "https://api.example.com/users?include=roles",
                 HttpMethod.GET,
                 "Users API Workspace"),
-            tuple("Create user", "{{ _.base_url }}/users", HttpMethod.POST, "Users API Workspace"));
+            tuple(
+                "Create user",
+                "https://api.example.com/users",
+                HttpMethod.POST,
+                "Users API Workspace"));
   }
 
   @Test
@@ -74,15 +78,15 @@ class InsomniaCollectionParserTest {
         writeFile(
             "bare-array.yaml",
             """
-                - _type: request
-                  name: Ping
-                  method: GET
-                  url: /ping
-                - _type: environment
-                  name: dev
-                  data:
-                    base_url: https://api.example.com
-                """);
+            - _type: request
+              name: Ping
+              method: GET
+              url: /ping
+            - _type: environment
+              name: dev
+              data:
+                base_url: https://api.example.com
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -99,10 +103,11 @@ class InsomniaCollectionParserTest {
         writeFile(
             "insomnia.json",
             """
-                {"resources": [
-                  {"_type": "workspace", "name": "JSON Workspace"},
-                  {"_type": "request", "name": "Ping", "method": "GET", "url": "/ping"}
-                ]}""");
+            {"resources": [
+              {"_type": "workspace", "name": "JSON Workspace"},
+              {"_type": "request", "name": "Ping", "method": "GET", "url": "/ping"}
+            ]}\
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -118,22 +123,22 @@ class InsomniaCollectionParserTest {
         writeFile(
             "mixed.yaml",
             """
-                resources:
-                  - _type: unit_test
-                    name: a test
-                  - _id: r1
-                    name: missing method
-                    url: /ping
-                  - _id: r2
-                    _type: request
-                    name: missing url
-                    method: GET
-                  - _id: r3
-                    _type: request
-                    name: Ping
-                    method: GET
-                    url: /ping
-                """);
+            resources:
+              - _type: unit_test
+                name: a test
+              - _id: r1
+                name: missing method
+                url: /ping
+              - _id: r2
+                _type: request
+                name: missing url
+                method: GET
+              - _id: r3
+                _type: request
+                name: Ping
+                method: GET
+                url: /ping
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -149,14 +154,14 @@ class InsomniaCollectionParserTest {
         writeFile(
             "no-workspace.yaml",
             """
-                resources:
-                  - _type: request_group
-                    name: Users
-                  - _type: request
-                    name: Ping
-                    method: GET
-                    url: /ping
-                """);
+            resources:
+              - _type: request_group
+                name: Users
+              - _type: request
+                name: Ping
+                method: GET
+                url: /ping
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -188,11 +193,15 @@ class InsomniaCollectionParserTest {
         .containsExactly(
             tuple(
                 "List users",
-                "{{ _.base_url }}/users?include=roles",
+                "https://api.example.com/users?include=roles",
                 HttpMethod.GET,
                 "Users API v5"),
-            tuple("Create user", "{{ _.base_url }}/users", HttpMethod.POST, "Users API v5"),
-            tuple("Delete user", "{{ _.base_url }}/users/17", HttpMethod.DELETE, "Users API v5"));
+            tuple("Create user", "https://api.example.com/users", HttpMethod.POST, "Users API v5"),
+            tuple(
+                "Delete user",
+                "https://api.example.com/users/17",
+                HttpMethod.DELETE,
+                "Users API v5"));
   }
 
   @Test
@@ -203,17 +212,17 @@ class InsomniaCollectionParserTest {
         writeFile(
             "nested-v5.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                name: "Deep Collection"
-                collection:
-                  - name: "Level 1"
+            type: "collection.insomnia.rest/5.0"
+            name: "Deep Collection"
+            collection:
+              - name: "Level 1"
+                children:
+                  - name: "Level 2"
                     children:
-                      - name: "Level 2"
-                        children:
-                          - name: "Deep ping"
-                            method: GET
-                            url: /deep/ping
-                """);
+                      - name: "Deep ping"
+                        method: GET
+                        url: /deep/ping
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -230,17 +239,17 @@ class InsomniaCollectionParserTest {
         writeFile(
             "request-with-children.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                name: "Nested Request"
-                collection:
-                  - name: "Parent"
-                    method: GET
-                    url: /parent
-                    children:
-                      - name: "Child"
-                        method: POST
-                        url: /parent/child
-                """);
+            type: "collection.insomnia.rest/5.0"
+            name: "Nested Request"
+            collection:
+              - name: "Parent"
+                method: GET
+                url: /parent
+                children:
+                  - name: "Child"
+                    method: POST
+                    url: /parent/child
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -259,8 +268,9 @@ class InsomniaCollectionParserTest {
         writeFile(
             "insomnia-v5.json",
             """
-                {"type": "collection.insomnia.rest/5.0", "name": "JSON v5",
-                 "collection": [{"name": "Ping", "method": "GET", "url": "/ping"}]}""");
+            {"type": "collection.insomnia.rest/5.0", "name": "JSON v5",
+             "collection": [{"name": "Ping", "method": "GET", "url": "/ping"}]}\
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -277,12 +287,12 @@ class InsomniaCollectionParserTest {
         writeFile(
             "v5-unnamed.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                collection:
-                  - name: "Ping"
-                    method: GET
-                    url: /ping
-                """);
+            type: "collection.insomnia.rest/5.0"
+            collection:
+              - name: "Ping"
+                method: GET
+                url: /ping
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -298,10 +308,10 @@ class InsomniaCollectionParserTest {
         writeFile(
             "empty-v5.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                name: "Empty"
-                collection: []
-                """);
+            type: "collection.insomnia.rest/5.0"
+            name: "Empty"
+            collection: []
+            """);
 
     assertThat(PARSER.parse(file)).isEmpty();
   }
@@ -314,16 +324,16 @@ class InsomniaCollectionParserTest {
         writeFile(
             "aliased.yaml",
             """
-                resources:
-                  - &ping
-                    _type: request
-                    name: Ping
-                    method: GET
-                    url: /ping
-                  - *ping
-                  - <<: *ping
-                    name: Merged
-                """);
+            resources:
+              - &ping
+                _type: request
+                name: Ping
+                method: GET
+                url: /ping
+              - *ping
+              - <<: *ping
+                name: Merged
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -342,12 +352,12 @@ class InsomniaCollectionParserTest {
   void failsFastOnYamlCoercedMethodOrUrl(String brokenField) throws IOException {
     String content =
         """
-            resources:
-              - _type: request
-                name: Weird
-                %s
-                %s
-            """
+        resources:
+          - _type: request
+            name: Weird
+            %s
+            %s
+        """
             .formatted(
                 brokenField.startsWith("method") ? brokenField : "method: GET",
                 brokenField.startsWith("url") ? brokenField : "url: /ping");
@@ -364,12 +374,12 @@ class InsomniaCollectionParserTest {
         writeFile(
             "bad-method-v5.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                collection:
-                  - name: "Bad"
-                    method: FOO
-                    url: /x
-                """);
+            type: "collection.insomnia.rest/5.0"
+            collection:
+              - name: "Bad"
+                method: FOO
+                url: /x
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }
@@ -382,9 +392,9 @@ class InsomniaCollectionParserTest {
         writeFile(
             "no-collection.yaml",
             """
-                type: "collection.insomnia.rest/5.0"
-                name: "No tree"
-                """);
+            type: "collection.insomnia.rest/5.0"
+            name: "No tree"
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }
@@ -396,9 +406,9 @@ class InsomniaCollectionParserTest {
         writeFile(
             "spec-v5.yaml",
             """
-                type: "spec.insomnia.rest/5.0"
-                name: "An API spec"
-                """);
+            type: "spec.insomnia.rest/5.0"
+            name: "An API spec"
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }
@@ -411,11 +421,11 @@ class InsomniaCollectionParserTest {
         writeFile(
             "bad-method.yaml",
             """
-                resources:
-                  - _type: request
-                    method: FOO
-                    url: /x
-                """);
+            resources:
+              - _type: request
+                method: FOO
+                url: /x
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }

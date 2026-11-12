@@ -59,12 +59,11 @@ public final class UseAsCollectionAction extends AnAction {
 
   private static void addCollectionPath(@NotNull Project project, @NotNull String path) {
     EndpointCoverageSettings settings = EndpointCoverageSettings.getInstance(project);
-    EndpointCoverageSettings.State updated =
-        EndpointCoverageSettings.copyForUpdate(settings.getState());
-    if (!updated.collectionFilePaths.contains(path)) {
-      updated.collectionFilePaths.add(path);
-    }
-    settings.setState(updated);
+    settings.update(updated -> {
+      if (!updated.collectionFilePaths.contains(path)) {
+        updated.collectionFilePaths.add(path);
+      }
+    });
   }
 
   /**
@@ -105,12 +104,7 @@ public final class UseAsCollectionAction extends AnAction {
    */
   @Override
   public void update(@NotNull AnActionEvent event) {
-    Project project = event.getProject();
-    event
-        .getPresentation()
-        .setEnabledAndVisible(
-            project != null
-                && ActionFiles.isSupportedFile(event.getData(CommonDataKeys.VIRTUAL_FILE)));
+    ActionFiles.setEnabledForSupportedFile(event);
   }
 
   /**

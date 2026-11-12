@@ -7,14 +7,23 @@
 
 package com.luisppb16.collectionsync.scan;
 
+import com.intellij.codeInsight.MetaAnnotationUtil;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
+import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiLiteralExpression;
+import com.intellij.psi.PsiModifierList;
 import com.intellij.psi.PsiModifierListOwner;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.stream.Stream;
+import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 
 /** Shared PSI helpers for {@link EndpointAnnotationResolver} implementations. */
@@ -22,55 +31,68 @@ final class EndpointAnnotationResolvers {
 
   private EndpointAnnotationResolvers() {}
 
-  /**
-   * Reads an annotation member as a string.
-   *
-   * <p>Supported shapes: a string literal ({@code @Path("users")}), a single-element string array
-   * ({@code @RequestMapping("/users")}) and absent members (returns empty).
-   *
-   * @param annotation annotation to read; must not be null
-   * @param attribute member name, e.g. {@code value}; must not be null
-   * @return the trimmed string value, or empty when the member is absent or not a string
-   */
-  static Optional<String> stringValue(
-      @NotNull PsiAnnotation annotation, @NotNull String attribute) {
+  static List<String> allStrings(@NotNull PsiAnnotation annotation, @NotNull String attribute) {
     PsiAnnotationMemberValue value = annotation.findAttributeValue(attribute);
     if (value == null) {
-      return Optional.empty();
+      return List.of();
     }
     if (value instanceof PsiArrayInitializerMemberValue array) {
-      PsiAnnotationMemberValue[] initializers = array.getInitializers();
-      if (initializers.length == 1) {
-        value = initializers[0];
-      } else {
-        return Optional.empty();
+      return Arrays.stream(array.getInitializers())
+          .map(EndpointAnnotationResolvers::literalString)
+          .filter(Objects::nonNull)
+          .map(String::strip)
+          .toList();
+    }
+    String text = literalString(value);
+    return text == null ? List.of() : List.of(text.strip());
+  }
+
+  static List<PsiAnnotation> annotationsMatching(
+      @NotNull PsiModifierListOwner owner, @NotNull Collection<String> qualifiedNames) {
+    PsiModifierList modifierList = owner.getModifierList();
+    if (modifierList == null) {
+      return List.of();
+    }
+    return Arrays.stream(modifierList.getAnnotations())
+        .filter(annotation -> matches(annotation, qualifiedNames))
+        .toList();
+  }
+
+  static List<PsiAnnotation> annotationsMatchingInHierarchy(
+      @NotNull PsiClass psiClass, @NotNull Collection<String> qualifiedNames) {
+    Set<PsiClass> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    Deque<PsiClass> pending = new ArrayDeque<>();
+    pending.add(psiClass);
+    while (!pending.isEmpty()) {
+      PsiClass current = pending.removeFirst();
+      if (current == null || !seen.add(current)) {
+        continue;
       }
+      List<PsiAnnotation> matches = annotationsMatching(current, qualifiedNames);
+      if (!matches.isEmpty()) {
+        return matches;
+      }
+      Collections.addAll(pending, current.getSupers());
     }
-    if (value instanceof PsiLiteralExpression literal
-        && literal.getValue() instanceof String text) {
-      return Optional.of(text.strip());
-    }
-    return Optional.empty();
+    return List.of();
   }
 
-  static String firstString(@NotNull PsiAnnotation annotation, @NotNull String attribute) {
-    PsiAnnotationMemberValue value = annotation.findAttributeValue(attribute);
-    if (value instanceof PsiArrayInitializerMemberValue array
-        && array.getInitializers().length > 0) {
-      value = array.getInitializers()[0];
+  static boolean matches(
+      @NotNull PsiAnnotation annotation, @NotNull Collection<String> qualifiedNames) {
+    String qualifiedName = annotation.getQualifiedName();
+    if (qualifiedName != null && qualifiedNames.contains(qualifiedName)) {
+      return true;
     }
-    if (value instanceof PsiLiteralExpression literal
-        && literal.getValue() instanceof String text) {
-      return text.strip();
-    }
-    return "";
+    PsiClass annotationType = annotation.resolveAnnotationType();
+    return annotationType != null
+        && MetaAnnotationUtil.isMetaAnnotated(annotationType, qualifiedNames);
   }
 
-  static Optional<PsiAnnotation> findAnnotation(
-      @NotNull PsiModifierListOwner owner, @NotNull String qualifiedName) {
-    return Stream.ofNullable(owner.getModifierList())
-        .map(modifierList -> modifierList.findAnnotation(qualifiedName))
-        .filter(Objects::nonNull)
-        .findFirst();
+  private static String literalString(PsiAnnotationMemberValue value) {
+    if (value instanceof PsiLiteralExpression literal
+        && literal.getValue() instanceof String text) {
+      return text;
+    }
+    return null;
   }
 }

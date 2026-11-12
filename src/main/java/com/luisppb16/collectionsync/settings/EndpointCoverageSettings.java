@@ -16,9 +16,14 @@ import com.luisppb16.collectionsync.domain.model.ExclusionRule;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -63,32 +68,24 @@ public final class EndpointCoverageSettings
         && first.openApiFilePath.strip().equals(second.openApiFilePath.strip())
         && first.basePath.strip().equals(second.basePath.strip())
         && first.collectionFilePaths.equals(second.collectionFilePaths)
+        && Objects.equals(first.collectionBindings, second.collectionBindings)
         && first.exclusions.equals(second.exclusions)
         && first.autoScanOnProjectOpen == second.autoScanOnProjectOpen;
   }
 
   /**
-   * Returns a mutable copy of the given state, to edit and store back through {@link
-   * #setState(State)}: the whole state is replaced so every change is persisted atomically. Shared
-   * by every writer (settings UI, tool window, context menu actions) so a new state field is copied
-   * in exactly one place.
+   * Returns a mutable, normalized copy of the given state. Writers should prefer {@link
+   * #update(Consumer)}; this method remains for callers that need an isolated snapshot.
    *
    * @param current state to copy; must not be null
    * @return the editable copy; never null
    */
   public static @NotNull State copyForUpdate(@NotNull State current) {
     Objects.requireNonNull(current, "current must not be null");
-    State updated = new State();
-    updated.sourceType = current.sourceType;
-    updated.openApiFilePath = current.openApiFilePath;
-    updated.basePath = current.basePath;
-    updated.collectionFilePaths = new ArrayList<>(current.collectionFilePaths);
-    updated.exclusions = new ArrayList<>(current.exclusions);
-    updated.autoScanOnProjectOpen = current.autoScanOnProjectOpen;
-    return updated;
+    return normalized(current);
   }
 
-  private static Optional<ExclusionRule> toRule(ExclusionEntry entry) {
+  public static Optional<ExclusionRule> toRule(ExclusionEntry entry) {
     if (entry == null || isBlank(entry.getMethod()) || isBlank(entry.getPathPattern())) {
       return Optional.empty();
     }
@@ -98,6 +95,10 @@ public final class EndpointCoverageSettings
     } catch (IllegalArgumentException unsupportedMethod) {
       return Optional.empty();
     }
+  }
+
+  private static ExclusionEntry copyOf(ExclusionEntry entry) {
+    return entry == null ? null : new ExclusionEntry(entry.getMethod(), entry.getPathPattern());
   }
 
   private static State normalized(State loadedState) {
@@ -112,14 +113,45 @@ public final class EndpointCoverageSettings
     normalizedState.collectionFilePaths =
         new ArrayList<>(
             loadedState.collectionFilePaths == null ? List.of() : loadedState.collectionFilePaths);
-    normalizedState.exclusions =
-        new ArrayList<>(loadedState.exclusions == null ? List.of() : loadedState.exclusions);
+    normalizedState.exclusions = new ArrayList<>();
+    if (loadedState.exclusions != null) {
+      for (ExclusionEntry entry : loadedState.exclusions) {
+        normalizedState.exclusions.add(copyOf(entry));
+      }
+    }
+    normalizedState.collectionBindings = new ArrayList<>();
+    if (loadedState.collectionBindings != null) {
+      Set<String> collectionPaths = new HashSet<>(normalizedState.collectionFilePaths);
+      Set<String> boundPaths = new HashSet<>();
+      for (CollectionBinding binding : loadedState.collectionBindings) {
+        if (binding == null) {
+          continue;
+        }
+        String path = binding.getPath();
+        String module = binding.getModuleName();
+        if (path == null
+            || !collectionPaths.contains(path)
+            || module == null
+            || module.isBlank()
+            || !boundPaths.add(path)) {
+          continue;
+        }
+        normalizedState.collectionBindings.add(new CollectionBinding(path, module));
+      }
+    }
     normalizedState.autoScanOnProjectOpen = loadedState.autoScanOnProjectOpen;
     return normalizedState;
   }
 
   private static boolean isBlank(String value) {
     return value == null || value.isBlank();
+  }
+
+  public void update(@NotNull Consumer<State> mutation) {
+    Objects.requireNonNull(mutation, "mutation must not be null");
+    State updated = normalized(state);
+    mutation.accept(updated);
+    state = updated;
   }
 
   @Override
@@ -171,6 +203,23 @@ public final class EndpointCoverageSettings
   }
 
   /**
+   * @return a defensive copy of the explicit collection-to-module bindings; never null
+   */
+  public List<CollectionBinding> getCollectionBindings() {
+    return List.copyOf(state.collectionBindings);
+  }
+
+  public Map<String, String> collectionBindingsByPath() {
+    return state.collectionBindings.stream()
+        .filter(binding -> binding.getPath() != null)
+        .collect(
+            Collectors.toUnmodifiableMap(
+                CollectionBinding::getPath,
+                binding -> binding.getModuleName() == null ? "" : binding.getModuleName(),
+                (first, second) -> second));
+  }
+
+  /**
    * @return whether the coverage scan runs automatically when the project opens; never read from a
    *     null (the primitive field cannot be null, so hand-edited or legacy XML without the
    *     attribute keeps the {@code true} default)
@@ -195,8 +244,10 @@ public final class EndpointCoverageSettings
   public enum SourceType {
     /** Endpoints are read from a local OpenAPI 3.x document. */
     OPEN_API,
-    /** Endpoints are discovered scanning controller annotations (Spring MVC, JAX-RS). */
-    CONTROLLER_ANNOTATIONS;
+    /** Endpoints are discovered scanning controller annotations (Spring MVC, JAX-RS, Micronaut). */
+    CONTROLLER_ANNOTATIONS,
+    /** Both sources are scanned and their endpoints are merged. */
+    OPEN_API_AND_CONTROLLERS;
 
     /**
      * Parses a persisted source type.
@@ -269,6 +320,48 @@ public final class EndpointCoverageSettings
     }
   }
 
+  /** Serializable collection-to-module binding; kept as a public bean for IntelliJ XML. */
+  public static final class CollectionBinding {
+
+    private String path;
+    private String moduleName;
+
+    public CollectionBinding() {}
+
+    public CollectionBinding(String path, String moduleName) {
+      this.path = path;
+      this.moduleName = moduleName;
+    }
+
+    public String getPath() {
+      return path;
+    }
+
+    public void setPath(String path) {
+      this.path = path;
+    }
+
+    public String getModuleName() {
+      return moduleName;
+    }
+
+    public void setModuleName(String moduleName) {
+      this.moduleName = moduleName;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return other instanceof CollectionBinding binding
+          && Objects.equals(path, binding.path)
+          && Objects.equals(moduleName, binding.moduleName);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(path, moduleName);
+    }
+  }
+
   /** Persisted project state; public fields are the XML-serialized values. */
   public static final class State {
 
@@ -283,8 +376,11 @@ public final class EndpointCoverageSettings
      */
     public String basePath = "";
 
-    /** Paths of the collection files (Postman/Insomnia) to parse; never null. */
+    /** Paths of the collection files (Postman/Insomnia/OpenAPI) to parse; never null. */
     public List<String> collectionFilePaths = new ArrayList<>();
+
+    /** Explicit collection-to-module bindings; an absent path is resolved automatically. */
+    public List<CollectionBinding> collectionBindings = new ArrayList<>();
 
     /** Exclusion rules as serialized entries; never null. */
     public List<ExclusionEntry> exclusions = new ArrayList<>();

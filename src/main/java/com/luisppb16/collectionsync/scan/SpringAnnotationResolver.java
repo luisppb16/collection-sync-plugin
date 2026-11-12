@@ -7,6 +7,8 @@
 
 package com.luisppb16.collectionsync.scan;
 
+import com.intellij.codeInsight.AnnotationUtil;
+import com.intellij.codeInsight.MetaAnnotationUtil;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
@@ -16,13 +18,11 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiModifierListOwner;
 import com.intellij.psi.PsiReferenceExpression;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,25 +32,24 @@ import org.jetbrains.annotations.Nullable;
  *
  * <p>All lookups are done by annotation qualified name on the PSI modifier list, so the resolver
  * works even when the Spring annotations are declared as stubs and cannot be resolved to their
- * declaring classes.
+ * declaring classes. Composed annotations whose annotation type is meta-annotated with a mapping
+ * annotation are accepted as well.
  *
  * <ul>
  *   <li><b>isController:</b> the class (or any class of its superclass hierarchy) carries
  *       {@code @RestController}, or {@code @Controller} together with {@code @ResponseBody}, or a
  *       class-level {@code @RequestMapping}.
- *   <li><b>basePath:</b> {@code value}/{@code path} of the class-level {@code @RequestMapping}
- *       (first element when declared as an array), or {@code ""} when absent.
+ *   <li><b>basePaths:</b> every {@code value}/{@code path} of the class-level
+ *       {@code @RequestMapping}.
  *   <li><b>methods:</b> {@code @GetMapping}, {@code @PostMapping}, {@code @PutMapping},
  *       {@code @DeleteMapping} and {@code @PatchMapping} each declare one fixed HTTP method;
- *       {@code @RequestMapping} declares the methods of its {@code method} attribute. A
- *       {@code @RequestMapping} without a concrete {@code method} attribute yields an empty list,
- *       so the endpoint is omitted (no HTTP method is known).
- *   <li><b>methodPath:</b> {@code value}/{@code path} of the mapping annotation (first element when
- *       declared as an array), or {@code ""} when absent.
+ *       {@code @RequestMapping} declares the methods of its {@code method} attribute, or {@link
+ *       HttpMethod#ANY} when it declares none.
+ *   <li><b>methodPaths:</b> every {@code value}/{@code path} of the mapping annotation.
  * </ul>
  *
- * <p>{@code RequestMethod} constants that do not map to a supported {@link HttpMethod} (e.g. {@code
- * TRACE}) are skipped instead of failing the whole scan.
+ * <p>{@code RequestMethod} constants that do not map to a supported {@link HttpMethod} are skipped
+ * instead of failing the whole scan.
  */
 public final class SpringAnnotationResolver implements EndpointAnnotationResolver {
 
@@ -65,36 +64,70 @@ public final class SpringAnnotationResolver implements EndpointAnnotationResolve
   private static final String PATH = "path";
   private static final String METHOD = "method";
 
-  private static final List<FixedMapping> FIXED_MAPPINGS =
+  private static final List<FixedVerb> FIXED_MAPPINGS =
       List.of(
-          new FixedMapping("org.springframework.web.bind.annotation.GetMapping", HttpMethod.GET),
-          new FixedMapping("org.springframework.web.bind.annotation.PostMapping", HttpMethod.POST),
-          new FixedMapping("org.springframework.web.bind.annotation.PutMapping", HttpMethod.PUT),
-          new FixedMapping(
-              "org.springframework.web.bind.annotation.DeleteMapping", HttpMethod.DELETE),
-          new FixedMapping(
-              "org.springframework.web.bind.annotation.PatchMapping", HttpMethod.PATCH));
+          new FixedVerb("org.springframework.web.bind.annotation.GetMapping", HttpMethod.GET),
+          new FixedVerb("org.springframework.web.bind.annotation.PostMapping", HttpMethod.POST),
+          new FixedVerb("org.springframework.web.bind.annotation.PutMapping", HttpMethod.PUT),
+          new FixedVerb("org.springframework.web.bind.annotation.DeleteMapping", HttpMethod.DELETE),
+          new FixedVerb("org.springframework.web.bind.annotation.PatchMapping", HttpMethod.PATCH));
+
+  private static final List<String> MAPPING_NAMES =
+      Stream.concat(
+              Stream.of(REQUEST_MAPPING), FIXED_MAPPINGS.stream().map(FixedVerb::qualifiedName))
+          .toList();
 
   private static boolean isControllerClass(PsiClass psiClass) {
-    return findAnnotation(psiClass, REST_CONTROLLER).isPresent()
-        || (findAnnotation(psiClass, CONTROLLER).isPresent()
-            && findAnnotation(psiClass, RESPONSE_BODY).isPresent())
-        || findAnnotation(psiClass, REQUEST_MAPPING).isPresent();
+    return hasAnnotationInHierarchy(psiClass, REST_CONTROLLER)
+        || (hasAnnotationInHierarchy(psiClass, CONTROLLER)
+            && hasAnnotationInHierarchy(psiClass, RESPONSE_BODY))
+        || hasAnnotationInHierarchy(psiClass, REQUEST_MAPPING);
   }
 
-  /**
-   * Walks the class hierarchy from the class itself up through its superclasses. A {@code
-   * takeWhile} over a seen-set keeps the stream finite even for cyclic hierarchies.
-   */
-  private static List<PsiClass> hierarchyOf(PsiClass psiClass) {
-    Set<PsiClass> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-    return Stream.iterate(psiClass, Objects::nonNull, PsiClass::getSuperClass)
-        .takeWhile(seen::add)
-        .toList();
+  private static boolean hasAnnotationInHierarchy(PsiClass psiClass, String annotation) {
+    return !EndpointAnnotationResolvers.annotationsMatchingInHierarchy(
+            psiClass, List.of(annotation))
+        .isEmpty();
   }
 
-  private static List<HttpMethod> requestMappingMethods(PsiAnnotation requestMapping) {
-    return requestMethodValues(requestMapping.findAttributeValue(METHOD));
+  private static List<PsiAnnotation> mappingAnnotations(PsiModifierListOwner owner) {
+    return EndpointAnnotationResolvers.annotationsMatching(owner, MAPPING_NAMES);
+  }
+
+  private static List<String> mappingPaths(PsiAnnotation annotation) {
+    List<String> paths = new ArrayList<>();
+    paths.addAll(EndpointAnnotationResolvers.allStrings(annotation, VALUE));
+    paths.addAll(EndpointAnnotationResolvers.allStrings(annotation, PATH));
+    return paths.isEmpty() ? List.of("") : paths.stream().distinct().toList();
+  }
+
+  private static List<HttpMethod> methodsOf(PsiAnnotation annotation) {
+    String qualifiedName = annotation.getQualifiedName();
+    for (FixedVerb mapping : FIXED_MAPPINGS) {
+      if (mapping.qualifiedName().equals(qualifiedName)) {
+        return List.of(mapping.method());
+      }
+    }
+    PsiClass annotationType = annotation.resolveAnnotationType();
+    if (annotationType != null) {
+      for (FixedVerb mapping : FIXED_MAPPINGS) {
+        if (MetaAnnotationUtil.isMetaAnnotated(annotationType, List.of(mapping.qualifiedName()))) {
+          return List.of(mapping.method());
+        }
+      }
+    }
+    List<HttpMethod> methods = requestMappingMethods(annotation, annotationType);
+    return methods.isEmpty() ? List.of(HttpMethod.ANY) : methods;
+  }
+
+  private static List<HttpMethod> requestMappingMethods(
+      PsiAnnotation annotation, @Nullable PsiClass annotationType) {
+    PsiAnnotationMemberValue methodValue = annotation.findAttributeValue(METHOD);
+    if (methodValue == null && annotationType != null) {
+      PsiAnnotation metaAnnotation = AnnotationUtil.findAnnotation(annotationType, REQUEST_MAPPING);
+      methodValue = metaAnnotation == null ? null : metaAnnotation.findAttributeValue(METHOD);
+    }
+    return requestMethodValues(methodValue);
   }
 
   private static List<HttpMethod> requestMethodValues(
@@ -132,63 +165,44 @@ public final class SpringAnnotationResolver implements EndpointAnnotationResolve
     }
   }
 
-  private static String mappingPath(PsiAnnotation mapping) {
-    String value = EndpointAnnotationResolvers.firstString(mapping, VALUE);
-    return value.isEmpty() ? EndpointAnnotationResolvers.firstString(mapping, PATH) : value;
-  }
-
-  private static Optional<PsiAnnotation> findAnnotation(
-      PsiModifierListOwner owner, String... qualifiedNames) {
-    return Arrays.stream(qualifiedNames)
-        .map(qualifiedName -> EndpointAnnotationResolvers.findAnnotation(owner, qualifiedName))
-        .flatMap(Optional::stream)
-        .findFirst();
-  }
-
   @Override
   public boolean isController(@NotNull PsiClass psiClass) {
     Objects.requireNonNull(psiClass);
-    return hierarchyOf(psiClass).stream().anyMatch(SpringAnnotationResolver::isControllerClass);
+    return isControllerClass(psiClass);
   }
 
   @Override
-  public @NotNull String basePath(@NotNull PsiClass psiClass) {
+  public @NotNull List<String> basePaths(@NotNull PsiClass psiClass) {
     Objects.requireNonNull(psiClass);
-    return findAnnotation(psiClass, REQUEST_MAPPING)
-        .map(SpringAnnotationResolver::mappingPath)
-        .orElse("");
+    List<PsiAnnotation> annotations = mappingAnnotations(psiClass);
+    if (annotations.isEmpty()) {
+      return List.of("");
+    }
+    return annotations.stream()
+        .flatMap(annotation -> mappingPaths(annotation).stream())
+        .distinct()
+        .toList();
   }
 
   @Override
   public @NotNull List<HttpMethod> methods(@NotNull PsiMethod psiMethod) {
     Objects.requireNonNull(psiMethod);
-    List<HttpMethod> fixedMethods =
-        FIXED_MAPPINGS.stream()
-            .filter(mapping -> findAnnotation(psiMethod, mapping.qualifiedName()).isPresent())
-            .map(FixedMapping::httpMethod)
-            .toList();
-    if (!fixedMethods.isEmpty()) {
-      return fixedMethods;
-    }
-    return findAnnotation(psiMethod, REQUEST_MAPPING)
-        .map(SpringAnnotationResolver::requestMappingMethods)
-        .orElse(List.of());
+    return mappingAnnotations(psiMethod).stream()
+        .flatMap(annotation -> methodsOf(annotation).stream())
+        .distinct()
+        .toList();
   }
 
   @Override
-  public @NotNull String methodPath(@NotNull PsiMethod psiMethod) {
+  public @NotNull List<String> methodPaths(@NotNull PsiMethod psiMethod) {
     Objects.requireNonNull(psiMethod);
-    return findAnnotation(
-            psiMethod,
-            REQUEST_MAPPING,
-            "org.springframework.web.bind.annotation.GetMapping",
-            "org.springframework.web.bind.annotation.PostMapping",
-            "org.springframework.web.bind.annotation.PutMapping",
-            "org.springframework.web.bind.annotation.DeleteMapping",
-            "org.springframework.web.bind.annotation.PatchMapping")
-        .map(SpringAnnotationResolver::mappingPath)
-        .orElse("");
+    List<PsiAnnotation> annotations = mappingAnnotations(psiMethod);
+    if (annotations.isEmpty()) {
+      return List.of();
+    }
+    return annotations.stream()
+        .flatMap(annotation -> mappingPaths(annotation).stream())
+        .distinct()
+        .toList();
   }
-
-  private record FixedMapping(String qualifiedName, HttpMethod httpMethod) {}
 }

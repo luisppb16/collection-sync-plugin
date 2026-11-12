@@ -8,18 +8,26 @@
 package com.luisppb16.collectionsync.domain.model;
 
 /**
- * A request defined inside an imported collection (Postman v2.1 or Insomnia v4/v5).
+ * A request defined inside an imported collection (Postman v2.1, Insomnia v4/v5 or OpenAPI 3.x).
  *
- * <p>{@code rawUrl} is the URL exactly as declared in the collection: it may be a full URL ({@code
- * https://api.example.com/users/17}), use a collection variable ({@code {{baseUrl}}/users/:userId})
- * or a plain path ({@code /users/1}). Normalization is performed later by the matching engine.
+ * <p>{@code rawUrl} is the URL used for matching: it may be a full URL ({@code
+ * https://api.example.com/users/17}), a path with an unresolved variable ({@code
+ * {{baseUrl}}/users/:userId}) or a plain path ({@code /users/1}). Known collection variables are
+ * resolved before the request is created; unresolved ones stay as wildcards for {@code
+ * PathNormalizer}.
  *
  * @param method HTTP method; must not be null
- * @param rawUrl URL or path as declared in the collection; must not be blank
+ * @param rawUrl URL or path used for matching; must not be blank
  * @param name request name shown in the report; never null
- * @param collectionName name of the collection file the request belongs to; never blank
+ * @param collectionName name of the collection the request belongs to; never blank
+ * @param moduleName module/service the collection is associated with, or empty when global
  */
-public record ApiRequest(HttpMethod method, String rawUrl, String name, String collectionName) {
+public record ApiRequest(
+    HttpMethod method, String rawUrl, String name, String collectionName, String moduleName) {
+
+  public ApiRequest(HttpMethod method, String rawUrl, String name, String collectionName) {
+    this(method, rawUrl, name, collectionName, "");
+  }
 
   public ApiRequest {
     if (method == null) {
@@ -32,5 +40,10 @@ public record ApiRequest(HttpMethod method, String rawUrl, String name, String c
       throw new IllegalArgumentException("Collection name must not be null or blank");
     }
     name = name == null ? "" : name;
+    moduleName = moduleName == null ? "" : moduleName;
+  }
+
+  public ApiRequest withModuleName(String moduleName) {
+    return new ApiRequest(method, rawUrl, name, collectionName, moduleName);
   }
 }

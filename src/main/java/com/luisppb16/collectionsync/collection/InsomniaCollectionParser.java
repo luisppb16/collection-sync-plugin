@@ -14,6 +14,7 @@ import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -100,7 +101,8 @@ public final class InsomniaCollectionParser implements CollectionParser {
     return "request".equals(resource.path("_type").asText());
   }
 
-  private static ApiRequest toRequest(JsonNode resource, String collectionName) {
+  private static ApiRequest toRequest(
+      JsonNode resource, String collectionName, Map<String, String> variables) {
     JsonNode methodNode = resource.path("method");
     JsonNode urlNode = resource.path("url");
     if (methodNode.isMissingNode() || urlNode.isMissingNode()) {
@@ -111,7 +113,7 @@ public final class InsomniaCollectionParser implements CollectionParser {
           "Request 'method' and 'url' must be text values: " + resource.path("name").asText(""));
     }
     String method = methodNode.asText().strip();
-    String rawUrl = urlNode.asText().strip();
+    String rawUrl = CollectionVariables.resolve(urlNode.asText().strip(), variables);
     if (method.isEmpty() || rawUrl.isEmpty()) {
       return null;
     }
@@ -119,23 +121,30 @@ public final class InsomniaCollectionParser implements CollectionParser {
         HttpMethod.of(method), rawUrl, resource.path("name").asText(""), collectionName);
   }
 
-  private static List<ApiRequest> parseV5Collection(JsonNode root, File file) {
+  private static List<ApiRequest> parseV5Collection(
+      JsonNode root, File file, Map<String, String> variables) {
     JsonNode collection = root.get("collection");
     if (collection == null || !collection.isArray()) {
       throw new IllegalArgumentException(
           "Not an Insomnia v5 collection: expected a 'collection' array: " + file);
     }
-    return collectRequests(collection, CollectionParsers.displayNameOrFileBase(root, file));
+    return collectRequests(
+        collection, CollectionParsers.displayNameOrFileBase(root, file), variables);
   }
 
-  private static List<ApiRequest> collectRequests(JsonNode nodes, String collectionName) {
-    return nodes.valueStream().flatMap(node -> requestsOf(node, collectionName)).toList();
+  private static List<ApiRequest> collectRequests(
+      JsonNode nodes, String collectionName, Map<String, String> variables) {
+    return nodes
+        .valueStream()
+        .flatMap(node -> requestsOf(node, collectionName, variables))
+        .toList();
   }
 
-  private static Stream<ApiRequest> requestsOf(JsonNode node, String collectionName) {
+  private static Stream<ApiRequest> requestsOf(
+      JsonNode node, String collectionName, Map<String, String> variables) {
     return Stream.concat(
-        Stream.ofNullable(toRequest(node, collectionName)),
-        collectRequests(node.path("children"), collectionName).stream());
+        Stream.ofNullable(toRequest(node, collectionName, variables)),
+        collectRequests(node.path("children"), collectionName, variables).stream());
   }
 
   @Override
@@ -155,14 +164,18 @@ public final class InsomniaCollectionParser implements CollectionParser {
    */
   List<ApiRequest> parseRoot(@NotNull JsonNode root, @NotNull File file) {
     if (isV5Collection(root)) {
-      return parseV5Collection(root, file);
+      Map<String, String> variables =
+          CollectionVariables.uniqueValues(CollectionVariables.environmentData(List.of(), root));
+      return parseV5Collection(root, file, variables);
     }
     List<JsonNode> resources = resourcesOf(root, file);
     String collectionName =
         workspaceName(resources).orElseGet(() -> CollectionParsers.fileBaseName(file.getName()));
+    Map<String, String> variables =
+        CollectionVariables.uniqueValues(CollectionVariables.environmentData(resources, root));
     return resources.stream()
         .filter(InsomniaCollectionParser::isRequest)
-        .flatMap(resource -> Stream.ofNullable(toRequest(resource, collectionName)))
+        .flatMap(resource -> Stream.ofNullable(toRequest(resource, collectionName, variables)))
         .toList();
   }
 }

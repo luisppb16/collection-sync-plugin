@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,22 +30,29 @@ class CoverageServiceScanTest extends PsiTestCase {
 
   private static final String VALID_COLLECTION =
       """
-            {"info": {"name": "Valid API"}, "item": [
-              {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
-            ]}""";
+      {"info": {"name": "Valid API"}, "item": [
+        {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
+      ]}\
+      """;
 
   private static final String OPENAPI_SPEC =
       """
-            {"openapi": "3.0.0", "info": {"title": "Carro API", "version": "1.0"},
-             "paths": {"/carro": {"get": {"summary": "Get carro", "responses": {}}}}}""";
+      {"openapi": "3.0.0", "info": {"title": "Carro API", "version": "1.0"},
+       "paths": {"/carro": {"get": {"summary": "Get carro", "responses": {}}}}}\
+      """;
 
   private static final String PREFIXED_COLLECTION =
       """
-            {"info": {"name": "Prefixed API"}, "item": [
-              {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
-            ]}""";
+      {"info": {"name": "Prefixed API"}, "item": [
+        {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
+      ]}\
+      """;
 
   @TempDir Path tempDir;
+
+  private static CoverageService.ScanOutput lastScan(CoverageService service) {
+    return Objects.requireNonNull(service.lastScan(), "scan must have published a result");
+  }
 
   @Test
   @DisplayName(
@@ -56,9 +64,9 @@ class CoverageServiceScanTest extends PsiTestCase {
 
     CoverageResult result = service.scan();
 
-    assertThat(service.lastResult()).isSameAs(result);
-    assertThat(service.lastErrors()).hasSize(1);
-    assertThat(service.lastErrors().getFirst())
+    assertThat(lastScan(service).result()).isSameAs(result);
+    assertThat(lastScan(service).errors()).hasSize(1);
+    assertThat(lastScan(service).errors().getFirst())
         .startsWith(
             // Resolved through the bundle so the assertion holds in any locale.
             EndpointCoverageBundle.message("service.error.collection.parse", "broken.json", ""));
@@ -75,8 +83,8 @@ class CoverageServiceScanTest extends PsiTestCase {
 
     CoverageResult result = service.scan();
 
-    assertThat(service.lastResult()).isSameAs(result);
-    assertThat(service.lastErrors()).isEmpty();
+    assertThat(lastScan(service).result()).isSameAs(result);
+    assertThat(lastScan(service).errors()).isEmpty();
     assertThat(result.orphanCount()).isEqualTo(1);
     assertThat(result.collectionCount()).isEqualTo(1);
   }
@@ -91,8 +99,8 @@ class CoverageServiceScanTest extends PsiTestCase {
 
     CoverageResult result = service.scan();
 
-    assertThat(service.lastMissingCollectionPaths()).containsExactly(missing.toString());
-    assertThat(service.lastErrors()).hasSize(1);
+    assertThat(lastScan(service).missingCollectionPaths()).containsExactly(missing.toString());
+    assertThat(lastScan(service).errors()).hasSize(1);
     assertThat(result.coveredCount()).isZero();
     assertThat(result.uncoveredCount()).isZero();
   }
@@ -111,7 +119,7 @@ class CoverageServiceScanTest extends PsiTestCase {
 
     assertThat(result.coveredCount()).isEqualTo(1);
     assertThat(result.orphanCount()).isZero();
-    assertThat(service.lastErrors()).isEmpty();
+    assertThat(lastScan(service).errors()).isEmpty();
   }
 
   /**

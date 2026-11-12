@@ -10,11 +10,11 @@ package com.luisppb16.collectionsync.collection;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.io.JsonYaml;
+import com.luisppb16.collectionsync.io.OpenApiDocument;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -50,6 +50,7 @@ public final class CollectionParsers {
     return switch (formatOf(root)) {
       case POSTMAN -> new PostmanCollectionParser().parseRoot(root, file);
       case INSOMNIA -> new InsomniaCollectionParser().parseRoot(root, file);
+      case OPEN_API -> new OpenApiCollectionParser().parseRoot(root, file);
     };
   }
 
@@ -87,10 +88,16 @@ public final class CollectionParsers {
    * @return the display name; never null
    */
   static String displayNameOrFileBase(@NotNull JsonNode node, @NotNull File file) {
-    return Optional.ofNullable(node.path("name").asText(null))
-        .map(String::strip)
-        .filter(name -> !name.isEmpty())
-        .orElseGet(() -> fileBaseName(file.getName()));
+    return displayOrFileBase(node, "name", file);
+  }
+
+  static String displayTitleOrFileBase(@NotNull JsonNode info, @NotNull File file) {
+    return displayOrFileBase(info, "title", file);
+  }
+
+  private static String displayOrFileBase(JsonNode node, String property, File file) {
+    String value = node.path(property).asText("").strip();
+    return value.isEmpty() ? fileBaseName(file.getName()) : value;
   }
 
   private static Format formatOf(JsonNode root) {
@@ -105,6 +112,9 @@ public final class CollectionParsers {
         || root.isArray()) {
       return Format.INSOMNIA;
     }
+    if (OpenApiDocument.isOpenApi(root)) {
+      return Format.OPEN_API;
+    }
     throw new IllegalArgumentException(
         "Unsupported collection format: expected a Postman v2.1 collection ('info' and 'item') "
             + "or an Insomnia v4/v5 export ('resources' or a 'collection.insomnia.rest/5.x' type)");
@@ -117,6 +127,8 @@ public final class CollectionParsers {
     /**
      * Insomnia v4/v5: an object with {@code resources}, a bare resource array, or a v5 collection.
      */
-    INSOMNIA
+    INSOMNIA,
+    /** OpenAPI 3.x: an object with {@code openapi} and {@code paths}. */
+    OPEN_API
   }
 }

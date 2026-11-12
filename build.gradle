@@ -15,7 +15,7 @@ plugins {
 }
 
 group = 'com.luisppb16'
-version = '1.0.5'
+version = '1.0.4'
 
 repositories {
     mavenCentral()
@@ -54,6 +54,7 @@ dependencies {
     intellijPlatform {
         intellijIdea '2026.3'
         bundledPlugin 'com.intellij.java'
+        bundledPlugin 'org.jetbrains.kotlin'
         // IntelliJ Platform test framework (BasePlatformTestCase) for PSI-level tests.
         // Groovy does not auto-resolve Kotlin objects, so INSTANCE must be used explicitly.
         testFramework TestFrameworkType.Platform.INSTANCE

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,117 +74,120 @@ class CoverageScanIntegrationTest extends PsiTestCase {
   /** The exact scenario the base path setting was built for: bare code, prefixed collection. */
   private static final String CARRO_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            @org.springframework.web.bind.annotation.RestController
-            public class CarroController {
+      @org.springframework.web.bind.annotation.RestController
+      public class CarroController {
 
-                @org.springframework.web.bind.annotation.GetMapping("/carro")
-                public java.lang.String getCarro() {
-                    return null;
-                }
-            }
-            """;
+          @org.springframework.web.bind.annotation.GetMapping("/carro")
+          public java.lang.String getCarro() {
+              return null;
+          }
+      }
+      """;
 
   private static final String COCHE_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            @org.springframework.web.bind.annotation.RestController
-            @org.springframework.web.bind.annotation.RequestMapping("/api/test/v1")
-            public class CocheController {
+      @org.springframework.web.bind.annotation.RestController
+      @org.springframework.web.bind.annotation.RequestMapping("/api/test/v1")
+      public class CocheController {
 
-                @org.springframework.web.bind.annotation.GetMapping("/coche")
-                public java.lang.String getCoche() {
-                    return null;
-                }
-            }
-            """;
+          @org.springframework.web.bind.annotation.GetMapping("/coche")
+          public java.lang.String getCoche() {
+              return null;
+          }
+      }
+      """;
 
   private static final String MOTO_CONTROLLER =
       """
-            package com.example;
+      package com.example;
 
-            @org.springframework.web.bind.annotation.RestController
-            @org.springframework.web.bind.annotation.RequestMapping("/api/test/v1")
-            public class MotoController {
+      @org.springframework.web.bind.annotation.RestController
+      @org.springframework.web.bind.annotation.RequestMapping("/api/test/v1")
+      public class MotoController {
 
-                @org.springframework.web.bind.annotation.PostMapping("/moto")
-                public java.lang.String createMoto() {
-                    return null;
-                }
-            }
-            """;
+          @org.springframework.web.bind.annotation.PostMapping("/moto")
+          public java.lang.String createMoto() {
+              return null;
+          }
+      }
+      """;
 
   private static final String ORDER_RESOURCE =
       """
-            package com.example;
+      package com.example;
 
-            @jakarta.ws.rs.Path("/api/v1")
-            public class OrderResource {
+      @jakarta.ws.rs.Path("/api/v1")
+      public class OrderResource {
 
-                @jakarta.ws.rs.GET
-                @jakarta.ws.rs.Path("/orders/{orderId}")
-                public java.lang.String getOrder(long orderId) {
-                    return null;
-                }
-            }
-            """;
+          @jakarta.ws.rs.GET
+          @jakarta.ws.rs.Path("/orders/{orderId}")
+          public java.lang.String getOrder(long orderId) {
+              return null;
+          }
+      }
+      """;
 
   private static final String POSTMAN_CARRO_COLLECTION =
       """
-            {"info": {"name": "Carro API"}, "item": [
-              {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
-            ]}""";
+      {"info": {"name": "Carro API"}, "item": [
+        {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
+      ]}\
+      """;
 
   private static final String POSTMAN_COCHE_COLLECTION =
       """
-            {"info": {"name": "Coche API"}, "item": [
-              {"name": "Get coche", "request": {"method": "GET", "url": "{{baseUrl}}/coche"}}
-            ]}""";
+      {"info": {"name": "Coche API"}, "item": [
+        {"name": "Get coche", "request": {"method": "GET", "url": "{{baseUrl}}/coche"}}
+      ]}\
+      """;
 
   private static final String POSTMAN_VEHICLES_COLLECTION =
       """
-            {"info": {"name": "Vehicles API"}, "item": [
-              {"name": "Get coche", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/coche"}},
-              {"name": "Create moto", "request": {"method": "POST", "url": "{{baseUrl}}/api/test/v1/moto"}}
-            ]}""";
+      {"info": {"name": "Vehicles API"}, "item": [
+        {"name": "Get coche", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/coche"}},
+        {"name": "Create moto", "request": {"method": "POST", "url": "{{baseUrl}}/api/test/v1/moto"}}
+      ]}\
+      """;
 
   private static final String INSOMNIA_ORDERS_COLLECTION =
       """
-            _type: export
-            __export_format: 4
-            __export_date: 2026-01-01T00:00:00.000Z
-            __export_source: collection-sync-plugin-tests
-            resources:
-              - _id: wrk_1
-                _type: workspace
-                name: Orders API
-              - _id: req_1
-                _type: request
-                name: Get order
-                method: GET
-                url: "{{ _.base_url }}/orders/42"
-                parentId: wrk_1
-            """;
+      _type: export
+      __export_format: 4
+      __export_date: 2026-01-01T00:00:00.000Z
+      __export_source: collection-sync-plugin-tests
+      resources:
+        - _id: wrk_1
+          _type: workspace
+          name: Orders API
+        - _id: req_1
+          _type: request
+          name: Get order
+          method: GET
+          url: "{{ _.base_url }}/orders/42"
+          parentId: wrk_1
+      """;
 
   private static final String INSOMNIA_MOTO_COLLECTION =
       """
-            _type: export
-            __export_format: 4
-            __export_date: 2026-01-01T00:00:00.000Z
-            __export_source: collection-sync-plugin-tests
-            resources:
-              - _id: wrk_2
-                _type: workspace
-                name: Moto API
-              - _id: req_2
-                _type: request
-                name: Create moto
-                method: POST
-                url: "{{ _.base_url }}/moto"
-                parentId: wrk_2
-            """;
+      _type: export
+      __export_format: 4
+      __export_date: 2026-01-01T00:00:00.000Z
+      __export_source: collection-sync-plugin-tests
+      resources:
+        - _id: wrk_2
+          _type: workspace
+          name: Moto API
+        - _id: req_2
+          _type: request
+          name: Create moto
+          method: POST
+          url: "{{ _.base_url }}/moto"
+          parentId: wrk_2
+      """;
 
   @TempDir Path tempDir;
 
@@ -209,17 +213,16 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     assertThat(result.orphanCount()).isZero();
     assertThat(result.rows())
         .singleElement()
-        .satisfies(
-            row -> {
-              assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
-              assertThat(row.method()).isEqualTo(HttpMethod.GET);
-              assertThat(row.path()).isEqualTo("/carro");
-              assertThat(row.owner()).isEqualTo("com.example.CarroController");
-              assertThat(row.module()).isEqualTo(getFixture().getModule().getName());
-              assertThat(row.psiMethod()).isNotNull();
-              assertThat(psiMethodName(row.psiMethod())).isEqualTo("getCarro");
-            });
-    assertThat(service.lastErrors()).isEmpty();
+        .satisfies(row -> {
+          assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
+          assertThat(row.method()).isEqualTo(HttpMethod.GET);
+          assertThat(row.path()).isEqualTo("/carro");
+          assertThat(row.owner()).isEqualTo("com.example.CarroController");
+          assertThat(row.module()).isEqualTo(getFixture().getModule().getName());
+          assertThat(row.psiMethod()).isNotNull();
+          assertThat(psiMethodName(row.psiMethod())).isEqualTo("getCarro");
+        });
+    assertThat(Objects.requireNonNull(service.lastScan()).errors()).isEmpty();
   }
 
   @Test
@@ -260,12 +263,11 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     assertThat(result.orphanCount()).isZero();
     assertThat(result.rows())
         .singleElement()
-        .satisfies(
-            row -> {
-              assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
-              assertThat(row.path()).isEqualTo("/api/test/v1/coche");
-              assertThat(row.owner()).isEqualTo("com.example.CocheController");
-            });
+        .satisfies(row -> {
+          assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
+          assertThat(row.path()).isEqualTo("/api/test/v1/coche");
+          assertThat(row.owner()).isEqualTo("com.example.CocheController");
+        });
   }
 
   @Test
@@ -314,11 +316,10 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     assertThat(result.orphanCount()).isZero();
     assertThat(result.rows())
         .singleElement()
-        .satisfies(
-            row -> {
-              assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
-              assertThat(row.path()).isEqualTo("/api/test/v1/moto");
-            });
+        .satisfies(row -> {
+          assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
+          assertThat(row.path()).isEqualTo("/api/test/v1/moto");
+        });
   }
 
   @Test
@@ -338,13 +339,12 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     assertThat(result.collectionCount()).isEqualTo(1);
     assertThat(result.rows())
         .singleElement()
-        .satisfies(
-            row -> {
-              assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
-              assertThat(row.method()).isEqualTo(HttpMethod.GET);
-              assertThat(row.path()).isEqualTo("/api/v1/orders/{orderId}");
-              assertThat(row.owner()).isEqualTo("com.example.OrderResource");
-            });
+        .satisfies(row -> {
+          assertThat(row.status()).isEqualTo(CoverageStatus.COVERED);
+          assertThat(row.method()).isEqualTo(HttpMethod.GET);
+          assertThat(row.path()).isEqualTo("/api/v1/orders/{orderId}");
+          assertThat(row.owner()).isEqualTo("com.example.OrderResource");
+        });
   }
 
   @Test
@@ -364,7 +364,7 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     assertThat(result.coveredCount()).isEqualTo(2);
     assertThat(result.orphanCount()).isZero();
     assertThat(result.collectionCount()).isEqualTo(2);
-    assertThat(service.lastErrors()).isEmpty();
+    assertThat(Objects.requireNonNull(service.lastScan()).errors()).isEmpty();
     assertThat(result.rows())
         .extracting(CoverageRow::method, CoverageRow::path)
         .containsExactlyInAnyOrder(

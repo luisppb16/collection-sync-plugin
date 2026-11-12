@@ -21,6 +21,7 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
 import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
+import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.scan.EndpointAnnotationResolver;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,6 +31,7 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
@@ -82,6 +84,7 @@ import org.jetbrains.annotations.Nullable;
 public final class ControllerEndpointSource implements EndpointSource {
 
   private static final Logger LOG = Logger.getInstance(ControllerEndpointSource.class);
+  private static final Pattern EDGE_SLASHES = Pattern.compile("^/+|/+$");
 
   private final List<EndpointAnnotationResolver> resolvers;
 
@@ -150,7 +153,7 @@ public final class ControllerEndpointSource implements EndpointSource {
    * or redundant slashes on either side. Returns an empty string only when both inputs are empty,
    * which the caller treats as "no path declared" and skips.
    */
-  private static String joinPath(String basePath, String methodPath) {
+  static String joinPath(String basePath, String methodPath) {
     String base = stripSlashes(basePath);
     String method = stripSlashes(methodPath);
     String joined =
@@ -160,11 +163,38 @@ public final class ControllerEndpointSource implements EndpointSource {
     return joined.isEmpty() ? "" : "/" + joined;
   }
 
-  private static String stripSlashes(@Nullable String path) {
+  static String stripSlashes(@Nullable String path) {
     if (path == null) {
       return "";
     }
-    return path.strip().replaceAll("^/+|/+$", "");
+    return EDGE_SLASHES.matcher(path.strip()).replaceAll("");
+  }
+
+  static List<ApiEndpoint> expand(
+      List<String> basePaths,
+      List<String> methodPaths,
+      List<HttpMethod> methods,
+      String ownerClass,
+      String moduleName,
+      @Nullable PsiMethod psiMethod) {
+    List<HttpMethod> distinctMethods = methods.stream().distinct().toList();
+    if (distinctMethods.isEmpty()) {
+      return List.of();
+    }
+    List<String> distinctPaths = methodPaths.stream().distinct().toList();
+    List<ApiEndpoint> endpoints = new ArrayList<>();
+    for (String basePath : basePaths) {
+      for (String methodPath : distinctPaths) {
+        String path = joinPath(basePath, methodPath);
+        if (path.isEmpty()) {
+          continue;
+        }
+        for (HttpMethod method : distinctMethods) {
+          endpoints.add(new ApiEndpoint(method, path, ownerClass, moduleName, psiMethod));
+        }
+      }
+    }
+    return endpoints;
   }
 
   @Override
@@ -213,7 +243,8 @@ public final class ControllerEndpointSource implements EndpointSource {
     PsiShortNamesCache namesCache = PsiShortNamesCache.getInstance(module.getProject());
     return Arrays.stream(namesCache.getAllClassNames())
         .distinct()
-        .flatMap(className -> endpointsOfNamedClass(className, module, namesCache));
+        .flatMap(className -> endpointsOfNamedClass(className, module, namesCache))
+        .distinct();
   }
 
   private Stream<ApiEndpoint> endpointsOfNamedClass(
@@ -231,25 +262,22 @@ public final class ControllerEndpointSource implements EndpointSource {
 
   private Stream<ApiEndpoint> endpointsOfMethods(
       PsiClass psiClass, Module module, EndpointAnnotationResolver resolver) {
-    String basePath = resolver.basePath(psiClass);
     String ownerClass = Optional.ofNullable(psiClass.getQualifiedName()).orElse("");
+    List<String> basePaths = resolver.basePaths(psiClass);
     return Arrays.stream(psiClass.getAllMethods())
-        .flatMap(psiMethod -> endpointsOfMethod(psiMethod, basePath, ownerClass, module, resolver));
-  }
-
-  private Stream<ApiEndpoint> endpointsOfMethod(
-      PsiMethod psiMethod,
-      String basePath,
-      String ownerClass,
-      Module module,
-      EndpointAnnotationResolver resolver) {
-    String path = joinPath(basePath, resolver.methodPath(psiMethod));
-    if (path.isEmpty()) {
-      return Stream.empty();
-    }
-    return resolver.methods(psiMethod).stream()
-        .map(
-            httpMethod ->
-                new ApiEndpoint(httpMethod, path, ownerClass, module.getName(), psiMethod));
+        .flatMap(psiMethod -> {
+          List<HttpMethod> methods = resolver.methods(psiMethod);
+          if (methods.isEmpty()) {
+            return Stream.empty();
+          }
+          return expand(
+              basePaths,
+              resolver.methodPaths(psiMethod),
+              methods,
+              ownerClass,
+              module.getName(),
+              psiMethod)
+              .stream();
+        });
   }
 }

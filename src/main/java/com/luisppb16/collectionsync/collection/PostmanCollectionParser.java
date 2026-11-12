@@ -16,6 +16,7 @@ import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
@@ -49,21 +50,28 @@ public final class PostmanCollectionParser implements CollectionParser {
   private static final String REQUEST_NODE = "request";
   private static final String ITEM_NODE = "item";
 
-  private static List<ApiRequest> collectRequests(JsonNode items, String collectionName) {
-    return items.valueStream().flatMap(item -> requestsOf(item, collectionName)).toList();
+  private static List<ApiRequest> collectRequests(
+      JsonNode items, String collectionName, Map<String, String> variables) {
+    return items
+        .valueStream()
+        .flatMap(item -> requestsOf(item, collectionName, variables))
+        .toList();
   }
 
-  private static Stream<ApiRequest> requestsOf(JsonNode item, String collectionName) {
+  private static Stream<ApiRequest> requestsOf(
+      JsonNode item, String collectionName, Map<String, String> variables) {
+    Map<String, String> itemVariables = CollectionVariables.merge(variables, item.get("variable"));
     if (item.hasNonNull(REQUEST_NODE)) {
-      return Stream.ofNullable(toRequest(item, collectionName));
+      return Stream.ofNullable(toRequest(item, collectionName, itemVariables));
     }
     if (item.hasNonNull(ITEM_NODE)) {
-      return collectRequests(item.get(ITEM_NODE), collectionName).stream();
+      return collectRequests(item.get(ITEM_NODE), collectionName, itemVariables).stream();
     }
     return Stream.empty();
   }
 
-  private static ApiRequest toRequest(JsonNode item, String collectionName) {
+  private static ApiRequest toRequest(
+      JsonNode item, String collectionName, Map<String, String> variables) {
     JsonNode requestNode = item.get(REQUEST_NODE);
     JsonNode methodNode = requestNode.path("method");
     if (!methodNode.isMissingNode() && !methodNode.isTextual()) {
@@ -71,7 +79,7 @@ public final class PostmanCollectionParser implements CollectionParser {
           "Request 'method' must be a text value: " + item.path("name").asText(""));
     }
     String method = methodNode.asText("").strip();
-    String rawUrl = rawUrl(requestNode.get("url"));
+    String rawUrl = CollectionVariables.resolve(rawUrl(requestNode.get("url")), variables);
     if (method.isEmpty() || rawUrl.isEmpty()) {
       return null;
     }
@@ -111,6 +119,7 @@ public final class PostmanCollectionParser implements CollectionParser {
           "Not a Postman v2.1 collection: root object must contain 'info' and 'item': " + file);
     }
     String collectionName = CollectionParsers.displayNameOrFileBase(root.get("info"), file);
-    return collectRequests(root.get("item"), collectionName);
+    Map<String, String> variables = CollectionVariables.merge(Map.of(), root.get("variable"));
+    return collectRequests(root.get("item"), collectionName, variables);
   }
 }

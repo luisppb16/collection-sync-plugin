@@ -27,18 +27,20 @@ class CoverageServiceTest {
 
   private static final String VALID_COLLECTION =
       """
-            {"info": {"name": "Valid API"}, "item": [
-              {"name": "Ping", "request": {"method": "GET", "url": "/ping"}},
-              {"name": "Create user", "request": {"method": "POST", "url": "/users"}}
-            ]}""";
+      {"info": {"name": "Valid API"}, "item": [
+        {"name": "Ping", "request": {"method": "GET", "url": "/ping"}},
+        {"name": "Create user", "request": {"method": "POST", "url": "/users"}}
+      ]}\
+      """;
 
   private static final String BROKEN_COLLECTION = "definitely not json";
 
   private static final String PREFIXED_COLLECTION =
       """
-            {"info": {"name": "Prefixed API"}, "item": [
-              {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
-            ]}""";
+      {"info": {"name": "Prefixed API"}, "item": [
+        {"name": "Get carro", "request": {"method": "GET", "url": "{{baseUrl}}/api/test/v1/carro"}}
+      ]}\
+      """;
 
   @TempDir Path tempDir;
 
@@ -60,12 +62,11 @@ class CoverageServiceTest {
         .isTrue();
     assertThat(
             output.errors().stream()
-                .anyMatch(
-                    error ->
-                        error.startsWith(
-                            // Resolved through the bundle so the assertion holds in any locale.
-                            EndpointCoverageBundle.message(
-                                "service.error.collection.parse", "broken.json", ""))))
+                .anyMatch(error ->
+                    error.startsWith(
+                        // Resolved through the bundle so the assertion holds in any locale.
+                        EndpointCoverageBundle.message(
+                            "service.error.collection.parse", "broken.json", ""))))
         .as("broken file must be reported")
         .isTrue();
     assertThat(output.result().orphanCount()).isEqualTo(2);

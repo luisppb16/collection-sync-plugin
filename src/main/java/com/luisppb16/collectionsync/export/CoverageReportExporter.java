@@ -52,7 +52,7 @@ public final class CoverageReportExporter {
     lines.add("");
     lines.add(MARKDOWN_HEADER);
     lines.add(MARKDOWN_SEPARATOR);
-    allRows(result).map(CoverageReportExporter::toMarkdownRow).forEach(lines::add);
+    result.allRows().map(CoverageReportExporter::toMarkdownRow).forEach(lines::add);
     return String.join("\n", lines) + "\n";
   }
 
@@ -67,12 +67,8 @@ public final class CoverageReportExporter {
     Objects.requireNonNull(result);
     List<String> lines = new ArrayList<>();
     lines.add(CSV_HEADER);
-    allRows(result).map(CoverageReportExporter::toCsvRow).forEach(lines::add);
+    result.allRows().map(CoverageReportExporter::toCsvRow).forEach(lines::add);
     return String.join("\n", lines) + "\n";
-  }
-
-  private static Stream<CoverageRow> allRows(CoverageResult result) {
-    return Stream.concat(result.rows().stream(), result.excludedRows().stream());
   }
 
   private static String toMarkdownRow(CoverageRow row) {

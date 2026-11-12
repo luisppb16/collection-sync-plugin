@@ -33,7 +33,7 @@ public final class CoverageRowRenderer extends DefaultTableCellRenderer {
    * @param status status to render; must not be null
    * @return the localized text; never null
    */
-  public static @NotNull String textFor(@NotNull CoverageStatus status) {
+  static @NotNull String textFor(@NotNull CoverageStatus status) {
     return switch (Objects.requireNonNull(status)) {
       case COVERED -> EndpointCoverageBundle.message("ui.status.covered");
       case UNCOVERED -> EndpointCoverageBundle.message("ui.status.uncovered");
@@ -48,7 +48,7 @@ public final class CoverageRowRenderer extends DefaultTableCellRenderer {
    * @param status status to render; must not be null
    * @return the icon; never null
    */
-  public static @NotNull Icon iconFor(@NotNull CoverageStatus status) {
+  private static @NotNull Icon iconFor(@NotNull CoverageStatus status) {
     return switch (Objects.requireNonNull(status)) {
       case COVERED -> AllIcons.Actions.Checked;
       case UNCOVERED -> AllIcons.General.InspectionsWarning;

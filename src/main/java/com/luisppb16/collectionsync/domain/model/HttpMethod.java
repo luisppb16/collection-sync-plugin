@@ -17,7 +17,9 @@ public enum HttpMethod {
   DELETE,
   PATCH,
   HEAD,
-  OPTIONS;
+  OPTIONS,
+  TRACE,
+  ANY;
 
   /**
    * Parses an HTTP method, normalizing it to upper case.
@@ -31,6 +33,10 @@ public enum HttpMethod {
     if (raw == null || raw.isBlank()) {
       throw new IllegalArgumentException("HTTP method must not be null or blank");
     }
-    return HttpMethod.valueOf(raw.strip().toUpperCase(Locale.ROOT));
+    HttpMethod method = HttpMethod.valueOf(raw.strip().toUpperCase(Locale.ROOT));
+    if (method == ANY) {
+      throw new IllegalArgumentException("ANY is not an HTTP method");
+    }
+    return method;
   }
 }

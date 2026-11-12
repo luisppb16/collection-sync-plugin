@@ -30,50 +30,50 @@ class OpenApiEndpointSourceTest {
 
   private static final String JSON_SPEC =
       """
-            {
-              "openapi": "3.0.3",
-              "info": {"title": "Demo API", "version": "1.0.0"},
-              "paths": {
-                "/users": {
-                  "summary": "Users collection",
-                  "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}}],
-                  "get": {"operationId": "listUsers", "responses": {"200": {"description": "ok"}}},
-                  "post": {"operationId": "createUser", "responses": {"201": {"description": "created"}}}
-                },
-                "/users/{id}": {
-                  "description": "Single user",
-                  "servers": [{"url": "https://api.example.com"}],
-                  "$ref": "#/components/pathItems/UserItem",
-                  "get": {"operationId": "getUser", "responses": {"200": {"description": "ok"}}},
-                  "delete": {"operationId": "deleteUser", "responses": {"204": {"description": "deleted"}}},
-                  "patch": {"operationId": "patchUser", "responses": {"200": {"description": "ok"}}}
-                },
-                "/metrics": {
-                  "summary": "Only shared data, no operation",
-                  "parameters": [{"name": "range", "in": "query"}]
-                }
-              }
-            }
-            """;
+      {
+        "openapi": "3.0.3",
+        "info": {"title": "Demo API", "version": "1.0.0"},
+        "paths": {
+          "/users": {
+            "summary": "Users collection",
+            "parameters": [{"name": "q", "in": "query", "schema": {"type": "string"}}],
+            "get": {"operationId": "listUsers", "responses": {"200": {"description": "ok"}}},
+            "post": {"operationId": "createUser", "responses": {"201": {"description": "created"}}}
+          },
+          "/users/{id}": {
+            "description": "Single user",
+            "servers": [{"url": "https://api.example.com"}],
+            "$ref": "#/components/pathItems/UserItem",
+            "get": {"operationId": "getUser", "responses": {"200": {"description": "ok"}}},
+            "delete": {"operationId": "deleteUser", "responses": {"204": {"description": "deleted"}}},
+            "patch": {"operationId": "patchUser", "responses": {"200": {"description": "ok"}}}
+          },
+          "/metrics": {
+            "summary": "Only shared data, no operation",
+            "parameters": [{"name": "range", "in": "query"}]
+          }
+        }
+      }
+      """;
 
   private static final String YAML_SPEC =
       """
-            openapi: 3.1.0
-            info:
-              title: Demo API
-              version: 1.0.0
-            paths:
-              /health:
-                get:
-                  operationId: health
-                head:
-                  operationId: healthHead
-              /users/{id}:
-                put:
-                  operationId: updateUser
-                options:
-                  operationId: userOptions
-            """;
+      openapi: 3.1.0
+      info:
+        title: Demo API
+        version: 1.0.0
+      paths:
+        /health:
+          get:
+            operationId: health
+          head:
+            operationId: healthHead
+        /users/{id}:
+          put:
+            operationId: updateUser
+          options:
+            operationId: userOptions
+      """;
 
   private final Project project = mock(Project.class);
 
@@ -97,12 +97,11 @@ class OpenApiEndpointSourceTest {
             tuple(HttpMethod.DELETE, "/users/{id}"),
             tuple(HttpMethod.PATCH, "/users/{id}"));
     assertThat(endpoints)
-        .allSatisfy(
-            endpoint -> {
-              assertThat(endpoint.ownerClass()).isEqualTo("<openapi> openapi.json");
-              assertThat(endpoint.moduleName()).isEmpty();
-              assertThat(endpoint.psiMethod()).isNull();
-            });
+        .allSatisfy(endpoint -> {
+          assertThat(endpoint.ownerClass()).isEqualTo("<openapi> openapi.json");
+          assertThat(endpoint.moduleName()).isEmpty();
+          assertThat(endpoint.psiMethod()).isNull();
+        });
   }
 
   @Test

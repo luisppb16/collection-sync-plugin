@@ -74,10 +74,9 @@ class ControllerEndpointSourceModuleToleranceTest {
           throw new ProcessCanceledException();
         };
 
-    assertThatThrownBy(
-            () ->
-                ControllerEndpointSource.collectSkippingFailedModules(
-                    List.of(module), scan, (failedModule, failure) -> {}))
+    assertThatThrownBy(() ->
+            ControllerEndpointSource.collectSkippingFailedModules(
+                List.of(module), scan, (failedModule, failure) -> {}))
         .isInstanceOf(ProcessCanceledException.class);
   }
 

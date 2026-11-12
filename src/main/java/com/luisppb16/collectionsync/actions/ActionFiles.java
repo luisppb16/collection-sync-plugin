@@ -8,6 +8,9 @@
 package com.luisppb16.collectionsync.actions;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.CommonDataKeys;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
@@ -43,6 +46,14 @@ public final class ActionFiles {
    */
   public static boolean isSupportedFile(@Nullable VirtualFile file) {
     return file != null && SUPPORTED_FILE_TYPE_NAMES.contains(file.getFileType().getName());
+  }
+
+  static void setEnabledForSupportedFile(@NotNull AnActionEvent event) {
+    Project project = event.getProject();
+    event
+        .getPresentation()
+        .setEnabledAndVisible(
+            project != null && isSupportedFile(event.getData(CommonDataKeys.VIRTUAL_FILE)));
   }
 
   /**

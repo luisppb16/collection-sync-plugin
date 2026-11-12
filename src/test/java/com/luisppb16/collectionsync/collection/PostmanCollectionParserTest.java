@@ -58,10 +58,14 @@ class PostmanCollectionParserTest {
         .extracting(
             ApiRequest::name, ApiRequest::rawUrl, ApiRequest::method, ApiRequest::collectionName)
         .containsExactly(
-            tuple("List users", "{{baseUrl}}/users?include=roles", HttpMethod.GET, "Users API"),
-            tuple("Get user", "{{baseUrl}}/users/{{id}}", HttpMethod.GET, "Users API"),
-            tuple("Create user", "{{baseUrl}}/users", HttpMethod.POST, "Users API"),
-            tuple("Ping", "{{baseUrl}}/ping", HttpMethod.GET, "Users API"));
+            tuple(
+                "List users",
+                "https://api.example.com/users?include=roles",
+                HttpMethod.GET,
+                "Users API"),
+            tuple("Get user", "https://api.example.com/users/{{id}}", HttpMethod.GET, "Users API"),
+            tuple("Create user", "https://api.example.com/users", HttpMethod.POST, "Users API"),
+            tuple("Ping", "https://api.example.com/ping", HttpMethod.GET, "Users API"));
   }
 
   @Test
@@ -72,14 +76,14 @@ class PostmanCollectionParserTest {
         writeFile(
             "postman.yaml",
             """
-                info:
-                  name: "YAML Postman"
-                item:
-                  - name: "Ping"
-                    request:
-                      method: GET
-                      url: /ping
-                """);
+            info:
+              name: "YAML Postman"
+            item:
+              - name: "Ping"
+                request:
+                  method: GET
+                  url: /ping
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -96,7 +100,8 @@ class PostmanCollectionParserTest {
         writeFile(
             "empty.json",
             """
-                {"info": {"name": "Empty"}, "item": [{"name": "Empty folder", "item": []}]}""");
+            {"info": {"name": "Empty"}, "item": [{"name": "Empty folder", "item": []}]}\
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -111,10 +116,11 @@ class PostmanCollectionParserTest {
         writeFile(
             "ignored.json",
             """
-                {"info": {"name": "Mixed"}, "item": [
-                  {"name": "just a label"},
-                  {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
-                ]}""");
+            {"info": {"name": "Mixed"}, "item": [
+              {"name": "just a label"},
+              {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
+            ]}\
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -130,9 +136,10 @@ class PostmanCollectionParserTest {
         writeFile(
             "no-raw.json",
             """
-                {"info": {"name": "X"}, "item": [
-                  {"name": "No raw", "request": {"method": "GET", "url": {"path": ["users"]}}}
-                ]}""");
+            {"info": {"name": "X"}, "item": [
+              {"name": "No raw", "request": {"method": "GET", "url": {"path": ["users"]}}}
+            ]}\
+            """);
 
     assertThat(PARSER.parse(file)).isEmpty();
   }
@@ -145,10 +152,11 @@ class PostmanCollectionParserTest {
         writeFile(
             "no-method.json",
             """
-                {"info": {"name": "X"}, "item": [
-                  {"name": "No method", "request": {"url": "/ping"}},
-                  {"name": "Blank url", "request": {"method": "GET", "url": "   "}}
-                ]}""");
+            {"info": {"name": "X"}, "item": [
+              {"name": "No method", "request": {"url": "/ping"}},
+              {"name": "Blank url", "request": {"method": "GET", "url": "   "}}
+            ]}\
+            """);
 
     assertThat(PARSER.parse(file)).isEmpty();
   }
@@ -161,9 +169,10 @@ class PostmanCollectionParserTest {
         writeFile(
             "fallback-collection.json",
             """
-                {"info": {"_postman_id": "abc"}, "item": [
-                  {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
-                ]}""");
+            {"info": {"_postman_id": "abc"}, "item": [
+              {"name": "Ping", "request": {"method": "GET", "url": "/ping"}}
+            ]}\
+            """);
 
     List<ApiRequest> requests = PARSER.parse(file);
 
@@ -180,9 +189,10 @@ class PostmanCollectionParserTest {
         writeFile(
             "method.json",
             """
-                {"info": {"name": "X"}, "item": [
-                  {"name": "Ping", "request": {"method": "%s", "url": "/ping"}}
-                ]}"""
+            {"info": {"name": "X"}, "item": [
+              {"name": "Ping", "request": {"method": "%s", "url": "/ping"}}
+            ]}\
+            """
                 .formatted(rawMethod));
 
     List<ApiRequest> requests = PARSER.parse(file);
@@ -198,9 +208,10 @@ class PostmanCollectionParserTest {
         writeFile(
             "bad-method.json",
             """
-                {"info": {"name": "X"}, "item": [
-                  {"request": {"method": "FOO", "url": "/x"}}
-                ]}""");
+            {"info": {"name": "X"}, "item": [
+              {"request": {"method": "FOO", "url": "/x"}}
+            ]}\
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }
@@ -213,14 +224,14 @@ class PostmanCollectionParserTest {
         writeFile(
             "coerced-method.yaml",
             """
-                info:
-                  name: "X"
-                item:
-                  - name: "Weird"
-                    request:
-                      method: on
-                      url: /ping
-                """);
+            info:
+              name: "X"
+            item:
+              - name: "Weird"
+                request:
+                  method: on
+                  url: /ping
+            """);
 
     assertThatIllegalArgumentException().isThrownBy(() -> PARSER.parse(file));
   }

@@ -1,22 +1,29 @@
 # CollectionSync — Endpoint Coverage Tracker
 
 IntelliJ IDEA plugin that compares the **real REST endpoints** of your Java project (an OpenAPI
-3.x document or Spring MVC / JAX-RS/Quarkus controllers) against the requests in your **Postman
-(v2.1) and Insomnia (v4/v5) collections**, and tells you, endpoint by endpoint, what is covered,
-what is missing and which requests have been left orphaned.
+3.x document or Spring MVC / JAX-RS / Micronaut controllers) against the requests in your
+**Postman (v2.1), Insomnia (v4/v5) and OpenAPI 3.x collections**, and tells you, endpoint by
+endpoint, what is covered, what is missing and which requests have been left orphaned.
 
 ## What it does
 
-- **Discovers endpoints**: scans Spring controllers (`@RestController`, `@RequestMapping`…) and
-  JAX-RS/Quarkus (`@Path`, `@GET`…), or reads a local OpenAPI 3.x document, to build the project's
-  endpoint list.
-- **Reads collections**: parses Postman v2.1 or Insomnia v4/v5 collections (JSON and YAML,
-  including the nested v5 format). A broken file does not abort the report: the error is recorded
-  and the rest keeps contributing.
+- **Discovers endpoints**: scans Spring controllers (`@RestController`, `@RequestMapping`…),
+  JAX-RS/Quarkus (`jakarta.ws.rs` and legacy `javax.ws.rs`) and Micronaut (`@Controller`, `@Get`…),
+  or reads a local OpenAPI 3.x document, to build the project's endpoint list. Every path of a
+  mapping is expanded, and a mapping without an HTTP verb is kept as a wildcard endpoint. Composed
+  annotations meta-annotated with a mapping are detected too. Kotlin controllers are scanned when
+  the Kotlin plugin is installed; otherwise the Java scan is unchanged.
+- **Reads collections**: parses Postman v2.1, Insomnia v4/v5 and OpenAPI 3.x documents (JSON and
+  YAML, including the nested Insomnia v5 format). Known collection/environment variables are
+  resolved; unresolved expressions stay as wildcards. A broken file does not abort the report: the
+  error is recorded and the rest keeps contributing.
 - **Computes coverage**: classifies each endpoint as `COVERED`, `UNCOVERED`, `ORPHAN` or
   `EXCLUDED` through structural path matching (variables match by position; strict mode keeps
-  `/users/{id}` and `/users/me` apart).
-- **Exports the report**: Markdown or CSV, with a summary and every row (excluded ones included).
+  `/users/{id}` and `/users/me` apart). Endpoints and collections can be associated with project
+  modules: a bound collection only covers its module, while an unbound collection stays global and
+  covers every module.
+- **Exports the report**: Markdown or CSV, honoring the current filters (status, text and module),
+  so “only uncovered” can be exported directly.
 
 ## Usage
 
@@ -28,14 +35,17 @@ what is missing and which requests have been left orphaned.
   window is opened in the project, an automatic scan is launched. When disabled, the tool window
   starts in its empty state and only manual rescans (the *Rescan* button, the *Tools* menu,
   right-click) recompute coverage.
-- **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS) or `OPEN_API` (local document).
-- **OpenAPI file**: path of the OpenAPI 3.x document (only when the source is `OPEN_API`).
+- **Source type**: `CONTROLLER_ANNOTATIONS` (Spring/JAX-RS/Micronaut), `OPEN_API` (local document)
+  or `OPEN_API_AND_CONTROLLERS` (both are scanned and merged).
+- **OpenAPI file**: path of the OpenAPI 3.x document (used when the source type includes
+  `OPEN_API`).
 - **Base path**: URL root (e.g. `/api/test/v1`) ignored on both sides before matching — collections
   that write `{{baseUrl}}/api/test/v1/carro` and controllers that declare only `/carro` (or the
   prefix on both sides) still match. A path that does not start with it is left untouched; leave
   it empty for plain structural matching.
-- **Collection files**: Postman/Insomnia collection files to compare against (add them here or
-  from the tool window itself).
+- **Collection files**: Postman/Insomnia/OpenAPI files to compare against (add them here or from
+  the tool window). The Module column can pin each file to a project module; `(auto)` infers it
+  from the file path and leaves the collection global when there is no unambiguous match.
 - **Exclusions**: exclusion rules (method + path pattern, e.g. `GET /actuator/{name}`).
 
 ### 2. "Endpoint Coverage" tool window
@@ -45,9 +55,12 @@ Docked on the right, available in projects with Java modules:
 - **Rescan**: recomputes coverage in the background.
 - **Select collections…**: adds collection files to the list and rescans.
 - **Export report**: saves the current report as Markdown (`.md`) or CSV (`.csv`).
-- **Filters**: text field (path/owner/module, case-insensitive) and a status combo (All / Covered /
-  Uncovered / Orphan / Excluded). The table sorts by any column.
+- **Filters**: text field (path/owner/module, case-insensitive), a status combo (All / Covered /
+  Uncovered / Orphan / Excluded) and a module combo (All / each module / Global). The table sorts
+  by any column and the summary reflects the visible rows.
 - **Summary**: `X covered · Y uncovered · Z orphan · W excluded · N collections`.
+- **Export**: saves the report matching the current filters (Markdown or CSV), including excluded
+  rows when they are visible.
 - **Scan errors**: if a collection cannot be read or no longer exists, the failure is reported;
   when the file no longer exists, the notification includes the **"Remove collections that no
   longer exist"** action, which removes them from the settings and rescans. If the scan finds no
@@ -73,9 +86,10 @@ editor; when the source is `OPEN_API`, the configured document opens.
 - **Right-click** (in the Project view or the editor) a file the IDE recognizes as JSON, YAML or
   plain text (the extension does not matter):
   - **Endpoint Coverage: Check Coverage with This Collection**: validates that the file is a
-    Postman v2.1 / Insomnia v4/v5 collection with at least one request, adds it to *Collection
-    files* (no duplicates), rescans and opens the tool window. If the file no longer exists, or is
-    not a valid collection (or is empty), shows an error and leaves the settings untouched.
+    Postman v2.1 / Insomnia v4/v5 / OpenAPI 3.x collection with at least one request, adds it to
+    *Collection files* (no duplicates), rescans and opens the tool window. If the file no longer
+    exists, or is not a valid collection (or is empty), shows an error and leaves the settings
+    untouched.
   - **Endpoint Coverage: Use as OpenAPI Source**: validates that the document contains a `paths`
     object, sets it as the *OpenAPI file* with source type `OPEN_API`, rescans and opens the tool
     window. If the file is not a valid OpenAPI 3.x document, shows an error and leaves the
@@ -118,10 +132,12 @@ exception messages (fail-fast) are developer-facing and stay in English as well.
 
 ## Out of scope
 
-- **Generating** OpenAPI specifications (only existing documents are read).
+- **Generating** OpenAPI specifications or requests (only existing documents are read).
 - **Cloud sync**: Postman Cloud / Insomnia Git Sync.
 - JAX-RS **sub-resource locators** (`@Path` on methods returning another resource).
-- **Micronaut** (`@Controller`, `@Get`…).
+- **Ktor DSL** routes (they are function calls, not annotations).
+- **Bruno / HAR** collections (not parsed).
+- **Historical tracking or CI**: the report is an on-demand snapshot inside the IDE.
 - **Swagger 2.0** (OpenAPI 3.x only).
 
 ## 📝 Changelog

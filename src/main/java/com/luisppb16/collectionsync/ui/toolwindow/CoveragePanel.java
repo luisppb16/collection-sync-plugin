@@ -29,7 +29,6 @@ import com.intellij.ui.SearchTextField;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.table.JBTable;
 import com.intellij.util.ui.JBUI;
-import com.luisppb16.collectionsync.coverage.AutoScanPolicy;
 import com.luisppb16.collectionsync.coverage.CoverageService;
 import com.luisppb16.collectionsync.domain.model.CoverageResult;
 import com.luisppb16.collectionsync.domain.model.CoverageRow;
@@ -59,6 +58,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import javax.swing.Icon;
 import javax.swing.JButton;
@@ -84,7 +84,6 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class CoveragePanel extends JPanel {
 
-  private static final String NOTIFICATION_GROUP_ID = "CollectionSync Notifications";
   private static final long serialVersionUID = 1L;
   private final transient Project project;
   private final transient CoverageService coverageService;
@@ -94,16 +93,18 @@ public final class CoveragePanel extends JPanel {
       new TableRowSorter<>(tableModel);
   private final SearchTextField queryField = new SearchTextField(false);
   private final ComboBox<StatusFilter> statusFilterCombo = new ComboBox<>(StatusFilter.values());
+  private final ComboBox<ModuleFilter> moduleFilterCombo = new ComboBox<>();
   private final JLabel summaryLabel =
       new JLabel(EndpointCoverageBundle.message("toolwindow.summary.empty"));
   private final JBTable table = new JBTable(tableModel);
-  private JButton exportButton;
 
   /**
    * Stays {@code true} while the last scans keep reporting zero endpoints, so the warning is
    * reported once per run of empty scans instead of on every refresh.
    */
   private boolean zeroEndpointsNotified;
+
+  private boolean updatingModuleFilter;
 
   /**
    * Builds the panel and schedules the first scan so the table is never empty on open, unless the
@@ -118,15 +119,24 @@ public final class CoveragePanel extends JPanel {
     this.coverageService = project.getService(CoverageService.class);
     this.settings = EndpointCoverageSettings.getInstance(project);
     buildUi();
-    if (AutoScanPolicy.shouldAutoScan(settings.isAutoScanOnProjectOpen(), project)) {
+    if (settings.isAutoScanOnProjectOpen()) {
       rescan();
     }
   }
 
   private static boolean matchesQuery(@NotNull CoverageRow row, @NotNull String query) {
-    return Stream.of(row.path(), row.owner(), row.module())
-        .map(field -> field.toLowerCase(Locale.ROOT))
-        .anyMatch(field -> field.contains(query));
+    return containsIgnoreCase(row.path(), query)
+        || containsIgnoreCase(row.owner(), query)
+        || containsIgnoreCase(row.module(), query);
+  }
+
+  private static boolean containsIgnoreCase(String text, String query) {
+    for (int index = 0; index + query.length() <= text.length(); index++) {
+      if (text.regionMatches(true, index, query, 0, query.length())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ------------------------------------------------------------------ build
@@ -146,13 +156,10 @@ public final class CoveragePanel extends JPanel {
       @NotNull EndpointCoverageSettings.ExclusionEntry entry,
       @NotNull HttpMethod method,
       @NotNull List<Segment> rowSegments) {
-    try {
-      return HttpMethod.of(entry.getMethod()) == method
-          && PathMatcher.matchesStrict(
-              PathNormalizer.normalize(entry.getPathPattern()), rowSegments);
-    } catch (IllegalArgumentException brokenEntry) {
-      return false;
-    }
+    return EndpointCoverageSettings.toRule(entry)
+        .filter(rule -> rule.method() == method)
+        .map(rule -> PathMatcher.matchesStrict(rule.segments(), rowSegments))
+        .orElse(false);
   }
 
   private void buildUi() {
@@ -179,16 +186,24 @@ public final class CoveragePanel extends JPanel {
             EndpointCoverageBundle.message("toolwindow.button.choose.collections"),
             AllIcons.Actions.ListFiles,
             actionEvent -> chooseCollections()));
-    JButton exportButton =
+    actionsRow.add(
         actionButton(
             EndpointCoverageBundle.message("toolwindow.button.export"),
             AllIcons.General.Export,
-            actionEvent -> showExportMenu());
-    actionsRow.add(exportButton);
-    this.exportButton = exportButton;
+            actionEvent -> {
+              if (actionEvent.getSource() instanceof JComponent anchor) {
+                showExportMenu(anchor);
+              }
+            }));
 
     JPanel filterRow = new JPanel(new BorderLayout(8, 0));
     statusFilterCombo.addActionListener(actionEvent -> applyFilters());
+    moduleFilterCombo.addItem(ModuleFilter.ALL);
+    moduleFilterCombo.addActionListener(actionEvent -> {
+      if (!updatingModuleFilter) {
+        applyFilters();
+      }
+    });
     queryField
         .getTextEditor()
         .getDocument()
@@ -203,7 +218,10 @@ public final class CoveragePanel extends JPanel {
         .getTextEditor()
         .getEmptyText()
         .setText(EndpointCoverageBundle.message("toolwindow.filter.empty.text"));
-    filterRow.add(statusFilterCombo, BorderLayout.WEST);
+    JPanel filterControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    filterControls.add(statusFilterCombo);
+    filterControls.add(moduleFilterCombo);
+    filterRow.add(filterControls, BorderLayout.WEST);
     filterRow.add(queryField, BorderLayout.CENTER);
 
     constraints.gridy = 0;
@@ -272,16 +290,8 @@ public final class CoveragePanel extends JPanel {
       return;
     }
     CoverageResult result = output.result();
-    summaryLabel.setText(
-        EndpointCoverageBundle.message(
-            "toolwindow.summary.format",
-            result.coveredCount(),
-            result.uncoveredCount(),
-            result.orphanCount(),
-            result.excludedCount(),
-            result.collectionCount()));
-    tableModel.setRows(
-        Stream.concat(result.rows().stream(), result.excludedRows().stream()).toList());
+    tableModel.setRows(result.allRows().toList());
+    updateModuleFilter(result);
     // One snapshot: result, issues and missing paths all come from the same finished scan.
     notifyErrors(output.errors(), output.missingCollectionPaths());
     notifyZeroEndpoints(result);
@@ -290,22 +300,92 @@ public final class CoveragePanel extends JPanel {
 
   private void applyFilters() {
     rowSorter.setRowFilter(buildRowFilter());
+    updateSummary();
+  }
+
+  private void updateSummary() {
+    CoverageService.ScanOutput output = coverageService.lastScan();
+    if (output == null) {
+      summaryLabel.setText(EndpointCoverageBundle.message("toolwindow.summary.empty"));
+      return;
+    }
+    CoverageResult result = output.result();
+    CoverageResult.Counts counts =
+        isUnfiltered()
+            ? new CoverageResult.Counts(
+                result.coveredCount(),
+                result.uncoveredCount(),
+                result.orphanCount(),
+                result.excludedCount())
+            : result.counts(currentPredicate());
+    summaryLabel.setText(
+        EndpointCoverageBundle.message(
+            "toolwindow.summary.format",
+            counts.covered(),
+            counts.uncovered(),
+            counts.orphan(),
+            counts.excluded(),
+            result.collectionCount()));
   }
 
   private @Nullable RowFilter<CoverageTableModel, Integer> buildRowFilter() {
-    String query = queryField.getText().strip().toLowerCase(Locale.ROOT);
-    CoverageStatus selectedStatus = selectedStatus();
-    if (query.isEmpty() && selectedStatus == null) {
+    Predicate<CoverageRow> predicate = currentPredicate();
+    if (isUnfiltered()) {
       return null;
     }
     return new RowFilter<>() {
       @Override
       public boolean include(Entry<? extends CoverageTableModel, ? extends Integer> entry) {
-        CoverageRow row = entry.getModel().rowAt(entry.getIdentifier());
-        return (selectedStatus == null || row.status() == selectedStatus)
-            && (query.isEmpty() || matchesQuery(row, query));
+        return predicate.test(entry.getModel().rowAt(entry.getIdentifier()));
       }
     };
+  }
+
+  private Predicate<CoverageRow> currentPredicate() {
+    String query = queryField.getText().strip();
+    CoverageStatus selectedStatus = selectedStatus();
+    ModuleFilter selectedModule = selectedModuleFilter();
+    return row ->
+        (selectedStatus == null || row.status() == selectedStatus)
+            && (query.isEmpty() || matchesQuery(row, query))
+            && (selectedModule.module() == null || selectedModule.module().equals(row.module()));
+  }
+
+  private boolean isUnfiltered() {
+    return queryField.getText().isBlank()
+        && selectedStatus() == null
+        && selectedModuleFilter().module() == null;
+  }
+
+  private void updateModuleFilter(@NotNull CoverageResult result) {
+    ModuleFilter selected = selectedModuleFilter();
+    List<ModuleFilter> options = new ArrayList<>();
+    options.add(ModuleFilter.ALL);
+    result
+        .allRows()
+        .map(CoverageRow::module)
+        .distinct()
+        .sorted()
+        .forEach(module -> options.add(new ModuleFilter(module)));
+    if (options.equals(currentModuleOptions())) {
+      return;
+    }
+    updatingModuleFilter = true;
+    try {
+      moduleFilterCombo.removeAllItems();
+      options.forEach(moduleFilterCombo::addItem);
+      moduleFilterCombo.setSelectedItem(options.contains(selected) ? selected : ModuleFilter.ALL);
+    } finally {
+      updatingModuleFilter = false;
+    }
+  }
+
+  private List<ModuleFilter> currentModuleOptions() {
+    List<ModuleFilter> options = new ArrayList<>();
+    for (int index = 0; index < moduleFilterCombo.getItemCount(); index++) {
+      options.add(moduleFilterCombo.getItemAt(index));
+    }
+    return options;
   }
 
   // ------------------------------------------------------------------ navigation
@@ -316,6 +396,12 @@ public final class CoveragePanel extends JPanel {
             Objects.requireNonNull(
                 statusFilterCombo.getSelectedItem(), "status filter must be selected");
     return filter.status();
+  }
+
+  private @NotNull ModuleFilter selectedModuleFilter() {
+    return moduleFilterCombo.getSelectedItem() instanceof ModuleFilter filter
+        ? filter
+        : ModuleFilter.ALL;
   }
 
   private void navigateTo(@Nullable CoverageRow row) {
@@ -378,38 +464,35 @@ public final class CoveragePanel extends JPanel {
     if (selected.length == 0) {
       return;
     }
-    EndpointCoverageSettings.State updated =
-        EndpointCoverageSettings.copyForUpdate(settings.getState());
-    updated.collectionFilePaths =
-        new ArrayList<>(
-            Stream.concat(
-                    settings.getCollectionFilePaths().stream(),
-                    Arrays.stream(selected).map(VirtualFile::getPath))
-                .distinct()
-                .toList());
-    settings.setState(updated);
+    settings.update(updated -> {
+      updated.collectionFilePaths =
+          new ArrayList<>(
+              Stream.concat(
+                      updated.collectionFilePaths.stream(),
+                      Arrays.stream(selected).map(VirtualFile::getPath))
+                  .distinct()
+                  .toList());
+    });
     rescan();
   }
 
-  private void showExportMenu() {
-    showExportMenu(exportButton);
-  }
-
   private void showExportMenu(@NotNull JComponent anchor) {
-    CoverageResult result = coverageService.lastResult();
+    CoverageService.ScanOutput output = coverageService.lastScan();
+    CoverageResult result = output == null ? null : output.result();
     if (result == null) {
       notifyWarning(EndpointCoverageBundle.message("toolwindow.notification.no.data.to.export"));
       return;
     }
+    CoverageResult exportResult = result.filtered(currentPredicate());
     JPopupMenu menu = new JPopupMenu();
     menu.add(
         menuItem(
             EndpointCoverageBundle.message("toolwindow.menu.export.markdown"),
-            actionEvent -> exportReport(result, "md", CoverageReportExporter::toMarkdown)));
+            actionEvent -> exportReport(exportResult, "md", CoverageReportExporter::toMarkdown)));
     menu.add(
         menuItem(
             EndpointCoverageBundle.message("toolwindow.menu.export.csv"),
-            actionEvent -> exportReport(result, "csv", CoverageReportExporter::toCsv)));
+            actionEvent -> exportReport(exportResult, "csv", CoverageReportExporter::toCsv)));
     menu.show(anchor, 0, anchor.getHeight());
   }
 
@@ -511,20 +594,16 @@ public final class CoveragePanel extends JPanel {
   }
 
   private void exclude(@NotNull CoverageRow row) {
-    EndpointCoverageSettings.State updated =
-        EndpointCoverageSettings.copyForUpdate(settings.getState());
-    updated.exclusions.add(
-        new EndpointCoverageSettings.ExclusionEntry(row.method().name(), row.path()));
-    settings.setState(updated);
+    settings.update(updated ->
+        updated.exclusions.add(
+            new EndpointCoverageSettings.ExclusionEntry(row.method().name(), row.path())));
     rescan();
   }
 
   private void removeExclusion(@NotNull CoverageRow row) {
     List<Segment> rowSegments = PathNormalizer.normalize(row.path());
-    EndpointCoverageSettings.State updated =
-        EndpointCoverageSettings.copyForUpdate(settings.getState());
-    updated.exclusions.removeIf(entry -> sameExclusion(entry, row.method(), rowSegments));
-    settings.setState(updated);
+    settings.update(updated ->
+        updated.exclusions.removeIf(entry -> sameExclusion(entry, row.method(), rowSegments)));
     rescan();
   }
 
@@ -574,23 +653,19 @@ public final class CoveragePanel extends JPanel {
     // The existence filter stats the disk, which must stay off the EDT (a stale network mount
     // would freeze the IDE); the state update and the rescan stay on the EDT.
     ApplicationManager.getApplication()
-        .executeOnPooledThread(
-            () -> {
-              List<String> existingPaths = CoverageService.existingCollectionPaths(allPaths);
-              int removedCount = allPaths.size() - existingPaths.size();
-              ApplicationManager.getApplication()
-                  .invokeLater(
-                      () -> removeMissingCollections(existingPaths, removedCount),
-                      project.getDisposed());
-            });
+        .executeOnPooledThread(() -> {
+          List<String> existingPaths = CoverageService.existingCollectionPaths(allPaths);
+          int removedCount = allPaths.size() - existingPaths.size();
+          ApplicationManager.getApplication()
+              .invokeLater(
+                  () -> removeMissingCollections(existingPaths, removedCount),
+                  project.getDisposed());
+        });
   }
 
   private void removeMissingCollections(@NotNull List<String> existingPaths, int removedCount) {
     if (removedCount > 0) {
-      EndpointCoverageSettings.State updated =
-          EndpointCoverageSettings.copyForUpdate(settings.getState());
-      updated.collectionFilePaths = new ArrayList<>(existingPaths);
-      settings.setState(updated);
+      settings.update(updated -> updated.collectionFilePaths = new ArrayList<>(existingPaths));
       notifyInfo(
           EndpointCoverageBundle.message(
               "toolwindow.notification.missing.collections.removed", removedCount));
@@ -602,7 +677,7 @@ public final class CoveragePanel extends JPanel {
   private @NotNull Notification createNotification(
       @NotNull NotificationType type, @NotNull String message) {
     return NotificationGroupManager.getInstance()
-        .getNotificationGroup(NOTIFICATION_GROUP_ID)
+        .getNotificationGroup(CoverageService.NOTIFICATION_GROUP_ID)
         .createNotification(message, type);
   }
 
@@ -614,22 +689,16 @@ public final class CoveragePanel extends JPanel {
     createNotification(NotificationType.WARNING, message).notify(project);
   }
 
-  /**
-   * Filter entry of the status combo; {@link #ALL} disables the status condition. The label key is
-   * resolved through the resource bundle so the combo is localized.
-   */
   private enum StatusFilter {
-    ALL("toolwindow.filter.all", null),
-    COVERED("ui.status.covered", CoverageStatus.COVERED),
-    UNCOVERED("ui.status.uncovered", CoverageStatus.UNCOVERED),
-    ORPHAN("ui.status.orphan", CoverageStatus.ORPHAN),
-    EXCLUDED("ui.status.excluded", CoverageStatus.EXCLUDED);
+    ALL(null),
+    COVERED(CoverageStatus.COVERED),
+    UNCOVERED(CoverageStatus.UNCOVERED),
+    ORPHAN(CoverageStatus.ORPHAN),
+    EXCLUDED(CoverageStatus.EXCLUDED);
 
-    private final @NotNull String labelKey;
     private final @Nullable CoverageStatus filteredStatus;
 
-    StatusFilter(@NotNull String labelKey, @Nullable CoverageStatus status) {
-      this.labelKey = labelKey;
+    StatusFilter(@Nullable CoverageStatus status) {
       this.filteredStatus = status;
     }
 
@@ -643,7 +712,29 @@ public final class CoveragePanel extends JPanel {
 
     @Override
     public @NotNull String toString() {
-      return EndpointCoverageBundle.message(labelKey);
+      return filteredStatus == null
+          ? EndpointCoverageBundle.message("toolwindow.filter.all")
+          : CoverageRowRenderer.textFor(filteredStatus);
+    }
+  }
+
+  /**
+   * Filter entry of the status combo; {@link #ALL} disables the status condition. The label key is
+   * resolved through the resource bundle so the combo is localized.
+   */
+  private record ModuleFilter(@Nullable String module) {
+
+    private static final ModuleFilter ALL = new ModuleFilter(null);
+
+    @Override
+    public @NotNull String toString() {
+      if (module == null) {
+        return EndpointCoverageBundle.message("toolwindow.filter.all");
+      }
+      if (module.isEmpty()) {
+        return EndpointCoverageBundle.message("toolwindow.filter.global");
+      }
+      return module;
     }
   }
 }

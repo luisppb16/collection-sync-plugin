@@ -80,11 +80,10 @@ class CoverageEngineTest {
     assertThat(result.excludedCount()).isEqualTo(1);
     assertThat(result.excludedRows())
         .singleElement()
-        .satisfies(
-            row -> {
-              assertThat(row.status()).isEqualTo(CoverageStatus.EXCLUDED);
-              assertThat(row.path()).isEqualTo("/users/{id}");
-            });
+        .satisfies(row -> {
+          assertThat(row.status()).isEqualTo(CoverageStatus.EXCLUDED);
+          assertThat(row.path()).isEqualTo("/users/{id}");
+        });
     assertThat(result.coveredCount()).isEqualTo(2);
     assertThat(containsRow("/users/{id}", CoverageStatus.COVERED)).isFalse();
     // the requests that covered /users/{id} are hidden with it; only /reports stays orphan
@@ -275,6 +274,73 @@ class CoverageEngineTest {
 
     assertThat(result.excludedCount()).isEqualTo(1);
     assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given an endpoint without a concrete method, when a request with any verb exists, then it is covered")
+  void coversAnyMethodEndpointWithAnyRequestMethod() {
+    List<ApiEndpoint> anyEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.ANY, "/ping", "PingController", "app", null));
+    List<ApiRequest> anyRequests =
+        List.of(new ApiRequest(HttpMethod.POST, "/ping", "Ping", "Postman"));
+
+    result = compute(anyEndpoints, anyRequests, List.of());
+
+    assertThat(containsRow("/ping", CoverageStatus.COVERED)).isTrue();
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a request bound to one module, when two modules expose the same path, then only its module is covered")
+  void keepsModuleBoundRequestsScopedToTheirService() {
+    List<ApiEndpoint> moduleEndpoints =
+        List.of(
+            new ApiEndpoint(HttpMethod.GET, "/health", "ServiceAController", "service-a", null),
+            new ApiEndpoint(HttpMethod.GET, "/health", "ServiceBController", "service-b", null));
+    List<ApiRequest> boundRequests =
+        List.of(new ApiRequest(HttpMethod.GET, "/health", "A health", "Postman", "service-a"));
+
+    result = compute(moduleEndpoints, boundRequests, List.of());
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.uncoveredCount()).isEqualTo(1);
+    assertThat(result.rows())
+        .filteredOn(row -> row.status() == CoverageStatus.COVERED)
+        .singleElement()
+        .satisfies(row -> assertThat(row.module()).isEqualTo("service-a"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given a request without a module, when two modules expose the same path, then both endpoints are covered")
+  void letsGlobalRequestsCoverEveryModule() {
+    List<ApiEndpoint> moduleEndpoints =
+        List.of(
+            new ApiEndpoint(HttpMethod.GET, "/health", "ServiceAController", "service-a", null),
+            new ApiEndpoint(HttpMethod.GET, "/health", "ServiceBController", "service-b", null));
+    List<ApiRequest> globalRequests =
+        List.of(new ApiRequest(HttpMethod.GET, "/health", "Health", "Postman"));
+
+    result = compute(moduleEndpoints, globalRequests, List.of());
+
+    assertThat(result.coveredCount()).isEqualTo(2);
+    assertThat(result.uncoveredCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a coverage result, when it is filtered, then only the matching rows and counts remain")
+  void filtersResultAndRecomputesCounts() {
+    result = compute(endpoints, requests, List.of());
+
+    CoverageResult uncovered = result.filtered(row -> row.status() == CoverageStatus.UNCOVERED);
+
+    assertThat(uncovered.rows()).hasSize(1);
+    assertThat(uncovered.uncoveredCount()).isEqualTo(1);
+    assertThat(uncovered.coveredCount()).isZero();
+    assertThat(uncovered.orphanCount()).isZero();
   }
 
   @Test

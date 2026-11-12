@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.luisppb16.collectionsync.domain.model.ExclusionRule;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.CollectionBinding;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.ExclusionEntry;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.SourceType;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.State;
@@ -229,6 +230,33 @@ class EndpointCoverageSettingsTest {
     State updated = EndpointCoverageSettings.copyForUpdate(current);
 
     assertThat(updated.basePath).isEqualTo("/api/test/v1");
+  }
+
+  @Test
+  @DisplayName(
+      "Given a state with a collection binding, when it is copied for update, then the binding is not shared")
+  void doesNotShareCollectionBindingsWhenUpdatingState() {
+    State current = new State();
+    current.collectionFilePaths.add("/repo/users.json");
+    current.collectionBindings.add(new CollectionBinding("/repo/users.json", "service-a"));
+
+    State updated = EndpointCoverageSettings.copyForUpdate(current);
+    updated.collectionBindings.getFirst().setModuleName("service-b");
+
+    assertThat(current.collectionBindings.getFirst().getModuleName()).isEqualTo("service-a");
+  }
+
+  @Test
+  @DisplayName(
+      "Given a state with an exclusion, when it is copied for update, then the entry is not shared")
+  void doesNotShareExclusionEntriesWhenUpdatingState() {
+    State current = new State();
+    current.exclusions.add(new ExclusionEntry("GET", "/users/{id}"));
+
+    State updated = EndpointCoverageSettings.copyForUpdate(current);
+    updated.exclusions.getFirst().setPathPattern("/other");
+
+    assertThat(current.exclusions.getFirst().getPathPattern()).isEqualTo("/users/{id}");
   }
 
   @Test

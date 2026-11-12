@@ -13,11 +13,11 @@ import com.intellij.openapi.project.Project;
 import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.io.JsonYaml;
+import com.luisppb16.collectionsync.io.OpenApiDocument;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -36,9 +36,9 @@ import org.jetbrains.annotations.NotNull;
  *       kept exactly as declared (e.g. {@code /users/{id}}) and its value is a <i>path item</i>.
  *   <li><b>Operation extraction.</b> From each path item, only the lowercase HTTP operation members
  *       ({@code get}, {@code post}, {@code put}, {@code delete}, {@code patch}, {@code head},
- *       {@code options}) produce an {@link ApiEndpoint}: {@code parameters}, {@code servers},
- *       {@code summary}, {@code description}, {@code $ref} and any other non-operation key are
- *       ignored.
+ *       {@code options}, {@code trace}) produce an {@link ApiEndpoint}: {@code parameters}, {@code
+ *       servers}, {@code summary}, {@code description}, {@code $ref} and any other non-operation
+ *       key are ignored.
  * </ol>
  *
  * <p>An unparseable document is treated like a missing one: the source yields no endpoints, so a
@@ -47,8 +47,6 @@ import org.jetbrains.annotations.NotNull;
 public final class OpenApiEndpointSource implements EndpointSource {
 
   private static final Logger LOG = Logger.getInstance(OpenApiEndpointSource.class);
-  private static final Set<String> OPERATION_KEYS =
-      Set.of("get", "post", "put", "delete", "patch", "head", "options");
   private static final String OWNER_PREFIX = "<openapi>";
 
   private final String openApiFilePath;
@@ -65,20 +63,10 @@ public final class OpenApiEndpointSource implements EndpointSource {
 
   private static List<ApiEndpoint> endpointsOf(JsonNode root, String fileName) {
     String ownerClass = OWNER_PREFIX + " " + fileName;
-    return root.path("paths").properties().stream()
-        .flatMap(
-            pathEntry -> endpointsOf(pathEntry.getKey(), pathEntry.getValue(), ownerClass).stream())
-        .toList();
-  }
-
-  private static List<ApiEndpoint> endpointsOf(
-      String pathTemplate, JsonNode pathItem, String ownerClass) {
-    return pathItem.properties().stream()
-        .filter(operationEntry -> OPERATION_KEYS.contains(operationEntry.getKey()))
-        .map(
-            operationEntry ->
-                new ApiEndpoint(
-                    HttpMethod.of(operationEntry.getKey()), pathTemplate, ownerClass, "", null))
+    return OpenApiDocument.operations(root)
+        .map(operation ->
+            new ApiEndpoint(
+                HttpMethod.of(operation.methodKey()), operation.path(), ownerClass, "", null))
         .toList();
   }
 

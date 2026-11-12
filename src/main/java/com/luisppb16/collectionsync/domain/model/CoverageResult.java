@@ -8,6 +8,9 @@
 package com.luisppb16.collectionsync.domain.model;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 /**
  * Outcome of a coverage calculation.
@@ -44,4 +47,50 @@ public record CoverageResult(
       throw new IllegalArgumentException("Coverage counts must not be negative");
     }
   }
+
+  public Counts counts(Predicate<CoverageRow> predicate) {
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    int covered = 0;
+    int uncovered = 0;
+    int orphan = 0;
+    int excluded = 0;
+    for (CoverageRow row : rows) {
+      if (!predicate.test(row)) {
+        continue;
+      }
+      switch (row.status()) {
+        case COVERED -> covered++;
+        case UNCOVERED -> uncovered++;
+        case ORPHAN -> orphan++;
+        case EXCLUDED -> {}
+      }
+    }
+    for (CoverageRow row : excludedRows) {
+      if (predicate.test(row)) {
+        excluded++;
+      }
+    }
+    return new Counts(covered, uncovered, orphan, excluded);
+  }
+
+  public Stream<CoverageRow> allRows() {
+    return Stream.concat(rows.stream(), excludedRows.stream());
+  }
+
+  public CoverageResult filtered(Predicate<CoverageRow> predicate) {
+    Objects.requireNonNull(predicate, "predicate must not be null");
+    List<CoverageRow> filteredRows = rows.stream().filter(predicate).toList();
+    List<CoverageRow> filteredExcludedRows = excludedRows.stream().filter(predicate).toList();
+    Counts counts = counts(predicate);
+    return new CoverageResult(
+        filteredRows,
+        filteredExcludedRows,
+        counts.covered(),
+        counts.uncovered(),
+        counts.orphan(),
+        counts.excluded(),
+        collectionCount);
+  }
+
+  public record Counts(int covered, int uncovered, int orphan, int excluded) {}
 }

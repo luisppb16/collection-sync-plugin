@@ -21,29 +21,33 @@
     Keep your Postman and Insomnia collections in sync with your code.
 
     CollectionSync — Endpoint Coverage Tracker compares the REST endpoints declared in your Java
-    project (OpenAPI 3.x documents, Spring MVC and JAX-RS/Quarkus controllers) against the requests
-    of your existing Postman (v2.1) and Insomnia (v4) collections. The "Endpoint Coverage" tool
-    window shows, endpoint by endpoint, which ones are covered, uncovered, orphaned or excluded,
-    lets you navigate to the handler method, exclude noisy endpoints from the calculation and
-    export the full report as Markdown or CSV.
+    project (OpenAPI 3.x documents, Spring MVC, JAX-RS/Quarkus and Micronaut controllers) against
+    the requests of your existing Postman (v2.1), Insomnia (v4/v5) and OpenAPI 3.x collections.
+    The "Endpoint Coverage" tool window shows, endpoint by endpoint, which ones are covered,
+    uncovered, orphaned or excluded, lets you navigate to the handler method, associate collections
+    with project modules, exclude noisy endpoints from the calculation and export the filtered
+    report as Markdown or CSV.
 
     <h2>Main Features</h2>
     <ul>
-        <li><b>Endpoint Discovery:</b> Scans Spring (@RestController, @RequestMapping...) and
-        JAX-RS/Quarkus (@Path, @GET...) controllers, or a local OpenAPI 3.x document, to build the
-        list of REST endpoints in your project.</li>
-        <li><b>Collection Import:</b> Parses Postman v2.1 or Insomnia v4 collections (JSON and
-        YAML), tolerating broken files without aborting the report.</li>
+        <li><b>Endpoint Discovery:</b> Scans Spring, JAX-RS/Quarkus (jakarta and javax) and
+        Micronaut controllers, or local OpenAPI 3.x documents, to build the list of REST endpoints.
+        Kotlin controllers are scanned when the Kotlin plugin is installed. Every path of a mapping
+        is expanded and mappings without an HTTP verb are kept as wildcards.</li>
+        <li><b>Collection Import:</b> Parses Postman v2.1, Insomnia v4/v5 and OpenAPI 3.x (JSON and
+        YAML), resolving known variables and tolerating broken files without aborting the
+        report.</li>
         <li><b>Coverage Tracking:</b> Classifies every endpoint as COVERED, UNCOVERED or ORPHAN,
         with structural path matching (variables match by position, strict mode keeps
-        {@code /users/{id}} apart from {@code /users/me}).</li>
+        {@code /users/{id}} apart from {@code /users/me}) and optional collection-to-module
+        association for monorepos.</li>
         <li><b>Exclusions:</b> Right-click any endpoint to exclude it from the calculation
         (e.g. {@code /actuator/{name}}); excluded rows stay visible so the exclusion can be
         undone with one click.</li>
         <li><b>Navigation:</b> Double-click a row to jump to the controller method, or to the
         configured OpenAPI document.</li>
-        <li><b>Export:</b> Export the complete report (including excluded rows) as Markdown or
-        CSV.</li>
+        <li><b>Export:</b> Export the report matching the current filters (status, text, module)
+        as Markdown or CSV.</li>
     </ul>
     ]]></description>
 
@@ -64,6 +68,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends optional="true" config-file="withJava.xml">com.intellij.modules.java</depends>
+    <depends optional="true">org.jetbrains.kotlin</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="CollectionSync Notifications"

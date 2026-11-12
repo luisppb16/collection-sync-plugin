@@ -15,42 +15,36 @@ import com.luisppb16.collectionsync.domain.model.CoverageStatus;
 import com.luisppb16.collectionsync.domain.model.ExclusionRule;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.domain.model.Segment;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Computes the coverage report: for every endpoint, CUBIERTO (covered) or NO_CUBIERTO (uncovered);
- * for every collection request with no matching endpoint, HUÉRFANA (orphan).
+ * Computes the coverage report: for every endpoint, COVERED or UNCOVERED; for every collection
+ * request with no matching endpoint, ORPHAN.
  *
  * <h2>Algorithm</h2>
  *
  * <ol>
  *   <li>Every endpoint path, request URL and exclusion pattern is normalized once through {@link
  *       PathNormalizer}; when a base path is configured, its normalized segments are stripped from
- *       the root of all three ({@link PathMatcher#stripPrefix}), so a base URL declared only in the
- *       collections, only in the code, or in both places does not break the comparison.
+ *       the root of all three ({@link PathMatcher#stripPrefix}).
  *   <li><b>Exclusions first.</b> An endpoint is excluded when some {@link ExclusionRule} has the
- *       same HTTP method and strictly matches its path ({@link PathMatcher#matchesStrict}:
- *       variables only match variables, so excluding {@code /users/{id}} never swallows the sibling
- *       endpoint {@code /users/me}). Excluded endpoints are dropped from the report and counted in
- *       {@link CoverageResult#excludedCount()}.
+ *       same HTTP method and strictly matches its path ({@link PathMatcher#matchesStrict}).
  *   <li><b>Endpoint classification.</b> A non-excluded endpoint is COVERED when at least one
- *       request has the same HTTP method and a structurally matching path ({@link
- *       PathMatcher#matches}); otherwise it is UNCOVERED. Endpoints are <b>not consumable</b>:
- *       several requests may cover the same endpoint, which is normal in collections (different
- *       payloads for the same route).
- *   <li><b>Orphans.</b> A request is an ORPHAN when it is not excluded (strict match against any
- *       exclusion rule), does not cover an excluded endpoint (loose rule: requests carry concrete
- *       values or placeholders, not the endpoint's variable syntax), and does not match any
- *       non-excluded endpoint.
+ *       request has a compatible HTTP method (an {@link HttpMethod#ANY} endpoint matches every
+ *       method), a compatible module (an empty module on either side matches everything) and a
+ *       structurally matching path ({@link PathMatcher#matches}).
+ *   <li><b>Orphans.</b> A request is an ORPHAN when it is not excluded, does not cover an excluded
+ *       endpoint and does not match any non-excluded endpoint.
  * </ol>
- *
- * <p>Excluding an endpoint therefore also hides the requests that would otherwise have covered it,
- * so the report never shows orphans caused only by a user exclusion.
  */
 public final class CoverageEngine {
 
@@ -68,8 +62,8 @@ public final class CoverageEngine {
    * @param endpoints real endpoints of the project; must not be null
    * @param requests collection requests; must not be null
    * @param exclusions user exclusion rules; must not be null
-   * @param basePath user-defined URL root (e.g. {@code /api/test/v1}) ignored on both sides before
-   *     matching; must not be null, may be empty
+   * @param basePath user-defined URL root ignored on both sides before matching; must not be null,
+   *     may be empty
    * @return the report with display-sorted rows and aggregate counts; never null
    */
   public static CoverageResult compute(
@@ -81,20 +75,17 @@ public final class CoverageEngine {
     List<Segment> basePathSegments = PathNormalizer.normalize(basePath);
     List<Rule> rules =
         exclusions.stream()
-            .map(
-                rule ->
-                    new Rule(
-                        rule.method(), PathMatcher.stripPrefix(rule.segments(), basePathSegments)))
+            .map(rule ->
+                new Rule(rule.method(), PathMatcher.stripPrefix(rule.segments(), basePathSegments)))
             .toList();
     List<Shape> shapes =
         endpoints.stream()
-            .map(
-                endpoint ->
-                    new Shape(
-                        endpoint,
-                        new Rule(
-                            endpoint.method(),
-                            normalizeAgainstBasePath(endpoint.pathTemplate(), basePathSegments))))
+            .map(endpoint ->
+                new Shape(
+                    endpoint,
+                    new Rule(
+                        endpoint.method(),
+                        normalizeAgainstBasePath(endpoint.pathTemplate(), basePathSegments))))
             .toList();
     Map<Boolean, List<Shape>> shapesByExcluded =
         shapes.stream()
@@ -103,72 +94,88 @@ public final class CoverageEngine {
     List<Shape> includedShapes = shapesByExcluded.get(Boolean.FALSE);
     List<RequestShape> requestShapes =
         requests.stream()
-            .map(
-                request ->
-                    new RequestShape(
-                        request, normalizeAgainstBasePath(request.rawUrl(), basePathSegments)))
+            .map(request ->
+                new RequestShape(
+                    request, normalizeAgainstBasePath(request.rawUrl(), basePathSegments)))
             .toList();
 
-    List<CoverageRow> excludedRows =
-        excludedShapes.stream()
-            .map(shape -> rowOf(shape.endpoint(), CoverageStatus.EXCLUDED))
-            .toList();
+    Map<Integer, List<Shape>> includedBySize = bySize(includedShapes);
+    Map<Integer, List<Shape>> excludedBySize = bySize(excludedShapes);
+
+    Set<Shape> covered = Collections.newSetFromMap(new IdentityHashMap<>());
+    List<CoverageRow> orphanRows = new ArrayList<>();
+    for (RequestShape requestShape : requestShapes) {
+      int size = requestShape.segments().size();
+      boolean excludedByRule =
+          rules.stream().anyMatch(rule -> requestMatchesRule(requestShape, rule));
+      boolean coversExcluded =
+          excludedBySize.getOrDefault(size, List.of()).stream()
+              .anyMatch(shape -> covers(shape, requestShape));
+      boolean coversIncluded = false;
+      for (Shape shape : includedBySize.getOrDefault(size, List.of())) {
+        if (covers(shape, requestShape)) {
+          coversIncluded = true;
+          covered.add(shape);
+        }
+      }
+      if (!excludedByRule && !coversExcluded && !coversIncluded) {
+        orphanRows.add(orphanRowOf(requestShape.request()));
+      }
+    }
+
     List<CoverageRow> endpointRows =
-        includedShapes.stream().map(shape -> toRow(shape, requestShapes)).toList();
-    List<CoverageRow> orphanRows =
-        requestShapes.stream()
-            .filter(requestShape -> isOrphan(requestShape, rules, excludedShapes, includedShapes))
-            .map(requestShape -> orphanRowOf(requestShape.request()))
+        includedShapes.stream()
+            .map(shape ->
+                rowOf(
+                    shape.endpoint(),
+                    covered.contains(shape) ? CoverageStatus.COVERED : CoverageStatus.UNCOVERED))
             .toList();
-
-    int covered =
+    int coveredCount =
         (int) endpointRows.stream().filter(row -> row.status() == CoverageStatus.COVERED).count();
     List<CoverageRow> rows =
         Stream.concat(endpointRows.stream(), orphanRows.stream()).sorted(DISPLAY_ORDER).toList();
-    List<CoverageRow> sortedExcludedRows = excludedRows.stream().sorted(DISPLAY_ORDER).toList();
+    List<CoverageRow> excludedRows =
+        excludedShapes.stream()
+            .map(shape -> rowOf(shape.endpoint(), CoverageStatus.EXCLUDED))
+            .sorted(DISPLAY_ORDER)
+            .toList();
     return new CoverageResult(
         rows,
-        sortedExcludedRows,
-        covered,
-        endpointRows.size() - covered,
+        excludedRows,
+        coveredCount,
+        endpointRows.size() - coveredCount,
         orphanRows.size(),
         excludedShapes.size(),
         countCollections(requests));
   }
 
-  private static CoverageRow toRow(Shape shape, List<RequestShape> requestShapes) {
-    boolean isCovered =
-        requestShapes.stream().anyMatch(requestShape -> covers(shape, requestShape));
-    return rowOf(shape.endpoint(), isCovered ? CoverageStatus.COVERED : CoverageStatus.UNCOVERED);
+  private static Map<Integer, List<Shape>> bySize(List<Shape> shapes) {
+    return shapes.stream().collect(Collectors.groupingBy(shape -> shape.shape().segments().size()));
   }
 
   private static boolean isExcludedByRules(Shape shape, List<Rule> rules) {
     return rules.stream().anyMatch(rule -> matchesStrictly(rule, shape.shape()));
   }
 
-  private static boolean isOrphan(
-      RequestShape requestShape,
-      List<Rule> rules,
-      List<Shape> excludedShapes,
-      List<Shape> includedShapes) {
-    boolean excludedByRule =
-        rules.stream()
-            .anyMatch(
-                rule ->
-                    requestShape.request().method() == rule.method()
-                        && PathMatcher.matchesStrict(rule.segments(), requestShape.segments()));
-    if (excludedByRule) {
-      return false;
-    }
-    if (excludedShapes.stream().anyMatch(shape -> covers(shape, requestShape))) {
-      return false;
-    }
-    return includedShapes.stream().noneMatch(shape -> covers(shape, requestShape));
+  private static boolean requestMatchesRule(RequestShape requestShape, Rule rule) {
+    return requestShape.request().method() == rule.method()
+        && PathMatcher.matchesStrict(rule.segments(), requestShape.segments());
   }
 
   private static boolean covers(Shape shape, RequestShape requestShape) {
-    return requestShape.request().method() == shape.shape().method()
+    return methodCovers(shape.shape().method(), requestShape.request().method())
+        && moduleCovers(requestShape.request().moduleName(), shape.endpoint().moduleName())
         && PathMatcher.matches(shape.shape().segments(), requestShape.segments());
+  }
+
+  private static boolean methodCovers(HttpMethod endpointMethod, HttpMethod requestMethod) {
+    return endpointMethod == HttpMethod.ANY || endpointMethod == requestMethod;
+  }
+
+  private static boolean moduleCovers(String requestModule, String endpointModule) {
+    return requestModule.isEmpty()
+        || endpointModule.isEmpty()
+        || requestModule.equals(endpointModule);
   }
 
   private static boolean matchesStrictly(Rule first, Rule second) {
@@ -198,7 +205,7 @@ public final class CoverageEngine {
         request.method(),
         request.rawUrl(),
         request.collectionName(),
-        "",
+        request.moduleName(),
         null);
   }
 

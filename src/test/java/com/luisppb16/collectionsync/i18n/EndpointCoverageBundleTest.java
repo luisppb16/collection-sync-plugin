@@ -79,11 +79,10 @@ class EndpointCoverageBundleTest {
     Properties bundle = loadBundle(bundleName);
 
     assertThat(bundle)
-        .allSatisfy(
-            (key, value) -> {
-              assertThat(key).asString().isNotBlank();
-              assertThat(value).asString().isNotBlank();
-            });
+        .allSatisfy((key, value) -> {
+          assertThat(key).asString().isNotBlank();
+          assertThat(value).asString().isNotBlank();
+        });
   }
 
   @Test

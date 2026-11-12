@@ -11,28 +11,39 @@ import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.project.Project;
 import com.luisppb16.collectionsync.collection.CollectionParsers;
 import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.domain.model.CoverageResult;
 import com.luisppb16.collectionsync.domain.model.ExclusionRule;
+import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.domain.service.CoverageEngine;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
 import com.luisppb16.collectionsync.scan.JaxRsAnnotationResolver;
+import com.luisppb16.collectionsync.scan.MicronautAnnotationResolver;
 import com.luisppb16.collectionsync.scan.SpringAnnotationResolver;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
 import com.luisppb16.collectionsync.source.ControllerEndpointSource;
+import com.luisppb16.collectionsync.source.EndpointSource;
 import com.luisppb16.collectionsync.source.OpenApiEndpointSource;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -41,7 +52,7 @@ import org.jetbrains.annotations.Nullable;
  * last result for the tool window.
  *
  * <p>A scan never aborts because of one broken collection file: every file is parsed independently,
- * the failures are recorded as human-readable messages ({@link #lastErrors()}) and the remaining
+ * the failures are recorded as human-readable messages ({@link #lastScan()}) and the remaining
  * files still contribute to the report.
  *
  * <p>A scan is also never started while the project is in dumb mode (indexing): it is deferred with
@@ -51,10 +62,8 @@ import org.jetbrains.annotations.Nullable;
 @Service(Service.Level.PROJECT)
 public final class CoverageService {
 
+  public static final String NOTIFICATION_GROUP_ID = "CollectionSync Notifications";
   private static final String TASK_TITLE = EndpointCoverageBundle.message("service.task.title");
-
-  private static final String NOTIFICATION_GROUP_ID = "CollectionSync Notifications";
-
   private final Project project;
 
   /** Stays {@code true} while one deferred scan is registered with {@code runWhenSmart}. */
@@ -114,13 +123,34 @@ public final class CoverageService {
     Objects.requireNonNull(exclusions);
     Objects.requireNonNull(basePath);
     Objects.requireNonNull(scanIssues);
+    List<CollectionInput> collections =
+        collectionFiles.stream().map(file -> new CollectionInput(file, "")).toList();
+    return computeScanWithModules(endpoints, collections, exclusions, basePath, scanIssues);
+  }
+
+  /**
+   * Same as {@link #computeScan(List, List, List, String, List)} but with an optional module bound
+   * to each collection file, so requests are compared with the endpoints of their service.
+   *
+   * @param collections collection files with their module binding; must not be null
+   */
+  public static @NotNull ScanOutput computeScanWithModules(
+      @NotNull List<ApiEndpoint> endpoints,
+      @NotNull List<CollectionInput> collections,
+      @NotNull List<ExclusionRule> exclusions,
+      @NotNull String basePath,
+      @NotNull List<String> scanIssues) {
+    Objects.requireNonNull(endpoints);
+    Objects.requireNonNull(collections);
+    Objects.requireNonNull(exclusions);
+    Objects.requireNonNull(basePath);
+    Objects.requireNonNull(scanIssues);
     List<String> errors = new ArrayList<>(scanIssues);
     List<String> missingPaths = new ArrayList<>();
-    List<ApiRequest> requests =
-        collectionFiles.stream()
-            .flatMap(
-                collectionFile -> parseCollection(collectionFile, errors, missingPaths).stream())
-            .toList();
+    List<ApiRequest> requests = new ArrayList<>();
+    for (CollectionInput collection : collections) {
+      requests.addAll(parseCollection(collection, errors, missingPaths));
+    }
     return new ScanOutput(
         CoverageEngine.compute(endpoints, requests, exclusions, basePath), errors, missingPaths);
   }
@@ -138,12 +168,9 @@ public final class CoverageService {
     return paths.stream().filter(path -> new File(path).isFile()).toList();
   }
 
-  private static List<File> collectionFilesOf(EndpointCoverageSettings settings) {
-    return settings.getCollectionFilePaths().stream().map(File::new).toList();
-  }
-
   private static List<ApiRequest> parseCollection(
-      File collectionFile, List<String> errors, List<String> missingPaths) {
+      CollectionInput collection, List<String> errors, List<String> missingPaths) {
+    File collectionFile = collection.file();
     if (!collectionFile.isFile()) {
       errors.add(
           EndpointCoverageBundle.message(
@@ -160,7 +187,11 @@ public final class CoverageService {
             EndpointCoverageBundle.message(
                 "service.error.collection.empty", collectionFile.getName()));
       }
-      return requests;
+      return requests.isEmpty()
+          ? requests
+          : requests.stream()
+              .map(request -> request.withModuleName(collection.moduleName()))
+              .toList();
     } catch (IOException | IllegalArgumentException brokenFile) {
       errors.add(
           EndpointCoverageBundle.message(
@@ -180,6 +211,30 @@ public final class CoverageService {
    */
   static boolean tryScheduleOnce(@NotNull AtomicBoolean scheduled) {
     return scheduled.compareAndSet(false, true);
+  }
+
+  private static List<ApiEndpoint> distinctEndpoints(List<ApiEndpoint> endpoints) {
+    Map<EndpointKey, ApiEndpoint> byKey = new LinkedHashMap<>();
+    for (ApiEndpoint endpoint : endpoints) {
+      EndpointKey key =
+          new EndpointKey(endpoint.method(), endpoint.pathTemplate(), endpoint.moduleName());
+      byKey.merge(key, endpoint, (first, second) -> first.psiMethod() != null ? first : second);
+    }
+    return List.copyOf(byKey.values());
+  }
+
+  private List<CollectionInput> collectionInputs(EndpointCoverageSettings settings) {
+    List<String> moduleNames =
+        Arrays.stream(ModuleManager.getInstance(project).getModules())
+            .map(Module::getName)
+            .toList();
+    Map<String, String> explicitModules = settings.collectionBindingsByPath();
+    return settings.getCollectionFilePaths().stream()
+        .map(path ->
+            new CollectionInput(
+                new File(path),
+                CollectionModuleResolver.resolve(path, explicitModules.get(path), moduleNames)))
+        .toList();
   }
 
   /**
@@ -228,18 +283,17 @@ public final class CoverageService {
       return;
     }
     notifyIndexesNotReady();
-    dumbService.runWhenSmart(
-        () -> {
-          if (project.isDisposed()) {
-            return;
-          }
-          Runnable deferredOnDone = pendingOnDone;
-          pendingOnDone = null;
-          pendingSmartScan.set(false);
-          if (deferredOnDone != null) {
-            scanAsync(deferredOnDone);
-          }
-        });
+    dumbService.runWhenSmart(() -> {
+      if (project.isDisposed()) {
+        return;
+      }
+      Runnable deferredOnDone = pendingOnDone;
+      pendingOnDone = null;
+      pendingSmartScan.set(false);
+      if (deferredOnDone != null) {
+        scanAsync(deferredOnDone);
+      }
+    });
   }
 
   private void queueScan(@NotNull Runnable onDone) {
@@ -264,34 +318,8 @@ public final class CoverageService {
   }
 
   /**
-   * @return the result of the last finished scan, or null when no scan has run yet
-   */
-  public @Nullable CoverageResult lastResult() {
-    ScanOutput output = lastOutput;
-    return output == null ? null : output.result();
-  }
-
-  /**
-   * @return the issues recorded during the last scan (collection files that failed, with the
-   *     reason, and modules skipped by the endpoint source); never null
-   */
-  public List<String> lastErrors() {
-    ScanOutput output = lastOutput;
-    return output == null ? List.of() : output.errors();
-  }
-
-  /**
-   * @return the collection files of the last scan that no longer exist on disk; never null
-   */
-  public List<String> lastMissingCollectionPaths() {
-    ScanOutput output = lastOutput;
-    return output == null ? List.of() : output.missingCollectionPaths();
-  }
-
-  /**
    * @return a snapshot of the last finished scan (result, issues and missing paths), or null when
-   *     no scan has run yet; readers wanting a consistent trio must read this once instead of the
-   *     three getters above
+   *     no scan has run yet
    */
   public @Nullable ScanOutput lastScan() {
     return lastOutput;
@@ -307,9 +335,9 @@ public final class CoverageService {
     List<String> scanIssues = new ArrayList<>();
     List<ApiEndpoint> endpoints = collectEndpoints(settings, scanIssues);
     ScanOutput output =
-        computeScan(
+        computeScanWithModules(
             endpoints,
-            collectionFilesOf(settings),
+            collectionInputs(settings),
             settings.toRules(),
             settings.getBasePath(),
             scanIssues);
@@ -320,19 +348,67 @@ public final class CoverageService {
   private List<ApiEndpoint> collectEndpoints(
       EndpointCoverageSettings settings, List<String> scanIssues) {
     return switch (settings.getSourceType()) {
-      case OPEN_API -> new OpenApiEndpointSource(settings.getOpenApiFilePath()).collect(project);
-      case CONTROLLER_ANNOTATIONS ->
-          new ControllerEndpointSource(
-                  List.of(new SpringAnnotationResolver(), new JaxRsAnnotationResolver()))
-              .collect(
-                  project,
-                  (skippedModule, failure) ->
-                      scanIssues.add(
-                          EndpointCoverageBundle.message(
-                              "service.error.module.skipped",
-                              skippedModule.getName(),
-                              String.valueOf(failure.getMessage()))));
+      case OPEN_API -> openApiEndpoints(settings);
+      case CONTROLLER_ANNOTATIONS -> distinctEndpoints(controllerEndpoints(scanIssues));
+      case OPEN_API_AND_CONTROLLERS ->
+          distinctEndpoints(
+              Stream.concat(
+                      controllerEndpoints(scanIssues).stream(), openApiEndpoints(settings).stream())
+                  .toList());
     };
+  }
+
+  private List<ApiEndpoint> openApiEndpoints(EndpointCoverageSettings settings) {
+    return new OpenApiEndpointSource(settings.getOpenApiFilePath()).collect(project);
+  }
+
+  private List<ApiEndpoint> controllerEndpoints(List<String> scanIssues) {
+    List<ApiEndpoint> endpoints = new ArrayList<>(javaControllerEndpoints(scanIssues));
+    endpoints.addAll(kotlinEndpoints());
+    return endpoints;
+  }
+
+  private List<ApiEndpoint> javaControllerEndpoints(List<String> scanIssues) {
+    return new ControllerEndpointSource(
+            List.of(
+                new SpringAnnotationResolver(),
+                new JaxRsAnnotationResolver("jakarta.ws.rs"),
+                new JaxRsAnnotationResolver("javax.ws.rs"),
+                new MicronautAnnotationResolver()))
+        .collect(
+            project,
+            (skippedModule, failure) ->
+                scanIssues.add(
+                    EndpointCoverageBundle.message(
+                        "service.error.module.skipped",
+                        skippedModule.getName(),
+                        String.valueOf(failure.getMessage()))));
+  }
+
+  private List<ApiEndpoint> kotlinEndpoints() {
+    try {
+      Class<?> sourceClass =
+          Class.forName("com.luisppb16.collectionsync.source.KotlinEndpointSource");
+      EndpointSource source = (EndpointSource) sourceClass.getConstructor().newInstance();
+      return source.collect(project);
+    } catch (ProcessCanceledException cancelled) {
+      throw cancelled;
+    } catch (ReflectiveOperationException
+        | LinkageError
+        | IndexNotReadyException kotlinUnavailable) {
+      return List.of();
+    }
+  }
+
+  private record EndpointKey(HttpMethod method, String path, String module) {}
+
+  /** A collection file plus the module/service it is associated with (empty means global). */
+  public record CollectionInput(File file, String moduleName) {
+
+    public CollectionInput {
+      Objects.requireNonNull(file, "file must not be null");
+      moduleName = moduleName == null ? "" : moduleName;
+    }
   }
 
   /**
