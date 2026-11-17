@@ -21,7 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * File helpers shared by the Endpoint Coverage context menu actions: which files can act as a
+ * File helpers shared by the CollectionSync context menu actions: which files can act as a
  * collection or as an OpenAPI document, and how to read an OpenAPI tree.
  */
 public final class ActionFiles {

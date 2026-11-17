@@ -1,4 +1,4 @@
-# CollectionSync — Endpoint Coverage Tracker
+# CollectionSync
 
 IntelliJ IDEA plugin that compares the **real REST endpoints** of your Java project (an OpenAPI
 3.x document or Spring MVC / JAX-RS / Micronaut controllers) against the requests in your
@@ -29,7 +29,7 @@ endpoint, what is covered, what is missing and which requests have been left orp
 
 ### 1. Configuration
 
-`Settings/Preferences → Tools → Endpoint Coverage`:
+`Settings/Preferences → Tools → CollectionSync`:
 
 - **Scan coverage when the project opens**: enabled by default (`true`); the first time the tool
   window is opened in the project, an automatic scan is launched. When disabled, the tool window
@@ -48,9 +48,9 @@ endpoint, what is covered, what is missing and which requests have been left orp
   from the file path and leaves the collection global when there is no unambiguous match.
 - **Exclusions**: exclusion rules (method + path pattern, e.g. `GET /actuator/{name}`).
 
-### 2. "Endpoint Coverage" tool window
+### 2. "CollectionSync" tool window
 
-Docked on the right, available in projects with Java modules:
+Docked on the right, available in IDEs that ship the Java plugin:
 
 - **Rescan**: recomputes coverage in the background.
 - **Select collections…**: adds collection files to the list and rescans.
@@ -85,12 +85,12 @@ editor; when the source is `OPEN_API`, the configured document opens.
   (equivalent to "Rescan", available without opening the tool window).
 - **Right-click** (in the Project view or the editor) a file the IDE recognizes as JSON, YAML or
   plain text (the extension does not matter):
-  - **Endpoint Coverage: Check Coverage with This Collection**: validates that the file is a
+  - **CollectionSync: Check Coverage with This Collection**: validates that the file is a
     Postman v2.1 / Insomnia v4/v5 / OpenAPI 3.x collection with at least one request, adds it to
     *Collection files* (no duplicates), rescans and opens the tool window. If the file no longer
     exists, or is not a valid collection (or is empty), shows an error and leaves the settings
     untouched.
-  - **Endpoint Coverage: Use as OpenAPI Source**: validates that the document contains a `paths`
+  - **CollectionSync: Use as OpenAPI Source**: validates that the document contains a `paths`
     object, sets it as the *OpenAPI file* with source type `OPEN_API`, rescans and opens the tool
     window. If the file is not a valid OpenAPI 3.x document, shows an error and leaves the
     settings untouched.

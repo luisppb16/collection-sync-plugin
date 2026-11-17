@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Project-level settings of the Endpoint Coverage Tracker: where the endpoints come from, which
+ * Project-level settings of CollectionSync: where the endpoints come from, which
  * collection files to parse, which endpoints are always excluded from the report, and which base
  * path is ignored on both sides when matching.
  *

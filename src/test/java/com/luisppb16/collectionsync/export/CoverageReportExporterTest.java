@@ -62,7 +62,7 @@ class CoverageReportExporterTest {
 
     String markdown = CoverageReportExporter.toMarkdown(result);
 
-    assertThat(markdown).startsWith("# Endpoint Coverage Report");
+    assertThat(markdown).startsWith("# CollectionSync Report");
     assertThat(markdown)
         .contains(
             "- Covered: 1", "- Uncovered: 0", "- Orphans: 1", "- Excluded: 1", "- Collections: 1");

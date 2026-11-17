@@ -23,7 +23,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * "Endpoint Coverage: Use as OpenAPI Source": available on files the IDE recognizes as JSON, YAML
+ * "CollectionSync: Use as OpenAPI Source": available on files the IDE recognizes as JSON, YAML
  * or plain text; validates that the file is an OpenAPI 3.x document (an object with {@code paths})
  * and, when valid, sets it as the endpoint source and rescans.
  */

@@ -38,7 +38,7 @@ public final class CoverageReportExporter {
   public static String toMarkdown(CoverageResult result) {
     Objects.requireNonNull(result);
     List<String> lines = new ArrayList<>();
-    lines.add("# Endpoint Coverage Report");
+    lines.add("# CollectionSync Report");
     lines.add("");
     lines.add("## Summary");
     lines.add("");

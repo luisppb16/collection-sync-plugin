@@ -25,7 +25,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * "Endpoint Coverage: Check Coverage with This Collection": available on files the IDE recognizes
+ * "CollectionSync: Check Coverage with This Collection": available on files the IDE recognizes
  * as JSON, YAML or plain text; validates the file as a Postman v2.1 or Insomnia v4/v5 collection
  * with at least one request and, when valid, adds it to the project collection paths and rescans.
  */

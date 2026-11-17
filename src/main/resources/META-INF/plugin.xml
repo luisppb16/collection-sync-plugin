@@ -20,10 +20,10 @@
     <description><![CDATA[
     Keep your Postman and Insomnia collections in sync with your code.
 
-    CollectionSync — Endpoint Coverage Tracker compares the REST endpoints declared in your Java
-    project (OpenAPI 3.x documents, Spring MVC, JAX-RS/Quarkus and Micronaut controllers) against
-    the requests of your existing Postman (v2.1), Insomnia (v4/v5) and OpenAPI 3.x collections.
-    The "Endpoint Coverage" tool window shows, endpoint by endpoint, which ones are covered,
+    CollectionSync compares the REST endpoints declared in your Java project (OpenAPI 3.x
+    documents, Spring MVC, JAX-RS/Quarkus and Micronaut controllers) against the requests of your
+    existing Postman (v2.1), Insomnia (v4/v5) and OpenAPI 3.x collections.
+    The "CollectionSync" tool window shows, endpoint by endpoint, which ones are covered,
     uncovered, orphaned or excluded, lets you navigate to the handler method, associate collections
     with project modules, exclude noisy endpoints from the calculation and export the filtered
     report as Markdown or CSV.
@@ -60,7 +60,7 @@
         </ul>
         <h3>1.0.0</h3>
         <ul>
-            <li><b>Endpoint Coverage Tracker.</b> Coverage tool window comparing OpenAPI/Spring/JAX-RS
+            <li><b>CollectionSync.</b> Coverage tool window comparing OpenAPI/Spring/JAX-RS
             endpoints with Postman v2.1 and Insomnia v4 collections: status table with filters,
             navigation to handlers, exclusion rules and Markdown/CSV report export.</li>
         </ul>

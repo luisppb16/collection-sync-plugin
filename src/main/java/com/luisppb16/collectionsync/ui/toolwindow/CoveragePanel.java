@@ -76,7 +76,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Main panel of the "Endpoint Coverage" tool window: toolbar (rescan, collections, export),
+ * Main panel of the "CollectionSync" tool window: toolbar (rescan, collections, export),
  * filters, summary, coverage table and its actions (navigation and exclusions).
  *
  * <p>Every UI mutation happens on the EDT; the heavy work is delegated to {@link CoverageService},

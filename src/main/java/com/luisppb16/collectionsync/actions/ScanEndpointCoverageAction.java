@@ -21,7 +21,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * "Analyze Endpoints Coverage": activates the "Endpoint Coverage" tool window and launches a
+ * "Analyze Endpoints Coverage": activates the "CollectionSync" tool window and launches a
  * background scan.
  *
  * <p>The refresh of the table lives in {@link CoveragePanel#refresh()}; the panel runs its own scan
@@ -33,10 +33,10 @@ import org.jetbrains.annotations.NotNull;
 public final class ScanEndpointCoverageAction extends AnAction {
 
   /** Tool window id, exactly as registered in {@code withJava.xml}. */
-  static final String TOOL_WINDOW_ID = "Endpoint Coverage";
+  static final String TOOL_WINDOW_ID = "CollectionSync";
 
   /**
-   * Activates the "Endpoint Coverage" tool window and, once active, launches a background scan that
+   * Activates the "CollectionSync" tool window and, once active, launches a background scan that
    * refreshes the open panel on completion. Shared with the context menu actions so they behave
    * exactly the same. When the tool window is not available (project without the Java plugin),
    * nothing happens.

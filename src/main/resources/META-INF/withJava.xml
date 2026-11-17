@@ -13,10 +13,10 @@
     <extensions defaultExtensionNs="com.intellij">
         <projectConfigurable instance="com.luisppb16.collectionsync.settings.EndpointCoverageConfigurable"
                              id="EndpointCoverage"
-                             displayName="Endpoint Coverage"
+                             displayName="CollectionSync"
                              nonDefaultProject="false"/>
 
-        <toolWindow id="Endpoint Coverage"
+        <toolWindow id="CollectionSync"
                     secondary="false"
                     icon="/icons/pluginIcon.svg"
                     anchor="right"
@@ -35,14 +35,14 @@
         <action id="collectionsync.AnalyzeEndpointsCoverage"
                 class="com.luisppb16.collectionsync.actions.ScanEndpointCoverageAction"
                 text="Analyze Endpoints Coverage"
-                description="Analyzes the endpoint coverage of this project and opens the Endpoint Coverage tool window"
+                description="Analyzes the endpoint coverage of this project and opens the CollectionSync tool window"
                 icon="/icons/pluginIcon.svg">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
 
         <action id="collectionsync.UseAsCollection"
                 class="com.luisppb16.collectionsync.actions.UseAsCollectionAction"
-                text="Endpoint Coverage: Check Coverage with This Collection"
+                text="CollectionSync: Check Coverage with This Collection"
                 description="Adds this collection file (Postman v2.1 / Insomnia v4) to the coverage settings and rescans"
                 icon="/icons/pluginIcon.svg">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
@@ -51,7 +51,7 @@
 
         <action id="collectionsync.UseAsOpenApiSource"
                 class="com.luisppb16.collectionsync.actions.UseAsOpenApiSourceAction"
-                text="Endpoint Coverage: Use as OpenAPI Source"
+                text="CollectionSync: Use as OpenAPI Source"
                 description="Uses this OpenAPI 3.x document as the endpoint coverage source and rescans"
                 icon="/icons/pluginIcon.svg">
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
