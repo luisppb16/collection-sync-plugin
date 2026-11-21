@@ -27,9 +27,9 @@ import java.util.stream.Collectors;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Project-level settings of CollectionSync: where the endpoints come from, which
- * collection files to parse, which endpoints are always excluded from the report, and which base
- * path is ignored on both sides when matching.
+ * Project-level settings of CollectionSync: where the endpoints come from, which collection files
+ * to parse, which endpoints are always excluded from the report, and which base path is ignored on
+ * both sides when matching.
  *
  * <p>The state is persisted per project and is always <b>null-safe</b>: every list defaults to
  * empty and every string field defaults to the empty string, both on a fresh project and after
@@ -69,6 +69,7 @@ public final class EndpointCoverageSettings
         && first.basePath.strip().equals(second.basePath.strip())
         && first.collectionFilePaths.equals(second.collectionFilePaths)
         && Objects.equals(first.collectionBindings, second.collectionBindings)
+        && Objects.equals(first.collectionBasePaths, second.collectionBasePaths)
         && first.exclusions.equals(second.exclusions)
         && first.autoScanOnProjectOpen == second.autoScanOnProjectOpen;
   }
@@ -140,6 +141,25 @@ public final class EndpointCoverageSettings
       }
     }
     normalizedState.autoScanOnProjectOpen = loadedState.autoScanOnProjectOpen;
+    normalizedState.collectionBasePaths = new ArrayList<>();
+    if (loadedState.collectionBasePaths != null) {
+      Set<String> collectionPaths = new HashSet<>(normalizedState.collectionFilePaths);
+      Set<String> boundPaths = new HashSet<>();
+      for (CollectionBasePath entry : loadedState.collectionBasePaths) {
+        if (entry == null) {
+          continue;
+        }
+        String path = entry.getPath();
+        String basePath = entry.getBasePath();
+        if (path == null
+            || !collectionPaths.contains(path)
+            || isBlank(basePath)
+            || !boundPaths.add(path)) {
+          continue;
+        }
+        normalizedState.collectionBasePaths.add(new CollectionBasePath(path, basePath.strip()));
+      }
+    }
     return normalizedState;
   }
 
@@ -216,6 +236,16 @@ public final class EndpointCoverageSettings
             Collectors.toUnmodifiableMap(
                 CollectionBinding::getPath,
                 binding -> binding.getModuleName() == null ? "" : binding.getModuleName(),
+                (first, second) -> second));
+  }
+
+  public Map<String, String> collectionBasePathsByPath() {
+    return state.collectionBasePaths.stream()
+        .filter(entry -> entry.getPath() != null)
+        .collect(
+            Collectors.toUnmodifiableMap(
+                CollectionBasePath::getPath,
+                entry -> entry.getBasePath() == null ? "" : entry.getBasePath(),
                 (first, second) -> second));
   }
 
@@ -362,6 +392,48 @@ public final class EndpointCoverageSettings
     }
   }
 
+  /** Serializable per-collection base path override; kept as a public bean for IntelliJ XML. */
+  public static final class CollectionBasePath {
+
+    private String path;
+    private String basePath;
+
+    public CollectionBasePath() {}
+
+    public CollectionBasePath(String path, String basePath) {
+      this.path = path;
+      this.basePath = basePath;
+    }
+
+    public String getPath() {
+      return path;
+    }
+
+    public void setPath(String path) {
+      this.path = path;
+    }
+
+    public String getBasePath() {
+      return basePath;
+    }
+
+    public void setBasePath(String basePath) {
+      this.basePath = basePath;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return other instanceof CollectionBasePath entry
+          && Objects.equals(path, entry.path)
+          && Objects.equals(basePath, entry.basePath);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(path, basePath);
+    }
+  }
+
   /** Persisted project state; public fields are the XML-serialized values. */
   public static final class State {
 
@@ -381,6 +453,9 @@ public final class EndpointCoverageSettings
 
     /** Explicit collection-to-module bindings; an absent path is resolved automatically. */
     public List<CollectionBinding> collectionBindings = new ArrayList<>();
+
+    /** Base path overrides per collection file; the global {@code basePath} is the fallback. */
+    public List<CollectionBasePath> collectionBasePaths = new ArrayList<>();
 
     /** Exclusion rules as serialized entries; never null. */
     public List<ExclusionEntry> exclusions = new ArrayList<>();

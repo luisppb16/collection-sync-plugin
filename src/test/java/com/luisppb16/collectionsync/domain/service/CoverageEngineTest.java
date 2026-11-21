@@ -220,6 +220,113 @@ class CoverageEngineTest {
 
   @Test
   @DisplayName(
+      "Given two collections with different service base paths, when coverage is computed, "
+          + "then each request is normalized with its own prefix")
+  void appliesEachCollectionBasePathToItsOwnRequests() {
+    List<ApiEndpoint> serviceEndpoints =
+        List.of(
+            new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "service-a", null),
+            new ApiEndpoint(HttpMethod.GET, "/orders", "OrderController", "service-b", null));
+    List<ApiRequest> serviceRequests =
+        List.of(
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/service-a/users", "Users", "Service A")
+                .withBasePath("/service-a"),
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/service-b/orders", "Orders", "Service B")
+                .withBasePath("/service-b"));
+
+    result = CoverageEngine.compute(serviceEndpoints, serviceRequests, List.of(), "");
+
+    assertThat(result.coveredCount()).isEqualTo(2);
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection base path, when coverage is computed, then it replaces the global one")
+  void replacesGlobalBasePathWithTheCollectionOne() {
+    List<ApiEndpoint> bareEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "app", null));
+    List<ApiRequest> serviceRequests =
+        List.of(
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/service-a/users", "Users", "Service A")
+                .withBasePath("/service-a"));
+
+    result = CoverageEngine.compute(bareEndpoints, serviceRequests, List.of(), "/api");
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection base path and a global base path, when coverage is computed, "
+          + "then the global one is not applied after the collection override")
+  void doesNotApplyGlobalBasePathAfterTheCollectionOverride() {
+    List<ApiEndpoint> bareEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "app", null));
+    List<ApiRequest> requestsWithBothPrefixes =
+        List.of(
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/service-a/api/users", "Users", "Service A")
+                .withBasePath("/service-a"));
+
+    result = CoverageEngine.compute(bareEndpoints, requestsWithBothPrefixes, List.of(), "/api");
+
+    assertThat(result.coveredCount()).isZero();
+    assertThat(result.uncoveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName(
+      "Given an empty collection base path, when coverage is computed, then the global one is used")
+  void fallsBackToGlobalBasePathWhenCollectionBasePathIsBlank() {
+    List<ApiEndpoint> bareEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/carro", "CarroController", "app", null));
+    List<ApiRequest> prefixedRequests =
+        List.of(
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/api/test/v1/carro", "Get carro", "Postman")
+                .withBasePath("  "));
+
+    result = CoverageEngine.compute(bareEndpoints, prefixedRequests, List.of(), "/api/test/v1");
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a variable-only base path, when coverage is computed, then it is ignored instead of stripping the first segment")
+  void ignoresVariableOnlyBasePaths() {
+    List<ApiEndpoint> bareEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "app", null));
+    List<ApiRequest> requests =
+        List.of(
+            new ApiRequest(HttpMethod.GET, "{{baseUrl}}/users", "Users", "Postman")
+                .withBasePath("{{baseUrl}}"));
+
+    result = CoverageEngine.compute(bareEndpoints, requests, List.of(), "{{baseUrl}}");
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a request URL with host and port but no scheme, when coverage is computed, then the authority is ignored")
+  void coversHostPortUrlsWithoutScheme() {
+    List<ApiEndpoint> bareEndpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users/{id}", "UserController", "app", null));
+    List<ApiRequest> requests =
+        List.of(new ApiRequest(HttpMethod.GET, "localhost:8080/users/17", "User", "Postman"));
+
+    result = CoverageEngine.compute(bareEndpoints, requests, List.of(), "");
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
       "Given a rule authored from the full displayed path, when coverage is computed under a base path, "
           + "then the endpoint is excluded, its request is hidden and the sibling survives")
   void keepsExclusionSemanticsUnderBasePathStripping() {

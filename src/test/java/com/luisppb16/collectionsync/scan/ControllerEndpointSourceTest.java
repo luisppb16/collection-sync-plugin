@@ -382,6 +382,50 @@ class ControllerEndpointSourceTest extends PsiTestCase {
         .contains(tuple(HttpMethod.GET, "/composed"));
   }
 
+  @Test
+  @DisplayName(
+      "Given annotation paths declared as constants, when endpoints are collected, then they are resolved")
+  void resolvesConstantAnnotationPaths() {
+    addClass(
+        """
+        package com.example;
+
+        public final class ApiPaths {
+            public static final String BASE = "/api";
+            public static final String USERS = "/users";
+            public static final String ORDER_ID = "/orders" + "/{id}";
+        }
+        """);
+    addClass(
+        """
+        package com.example;
+
+        @org.springframework.web.bind.annotation.RestController
+        @org.springframework.web.bind.annotation.RequestMapping(com.example.ApiPaths.BASE)
+        public class ConstantController {
+
+            @org.springframework.web.bind.annotation.GetMapping(com.example.ApiPaths.USERS)
+            public java.lang.String users() {
+                return null;
+            }
+
+            @org.springframework.web.bind.annotation.GetMapping(com.example.ApiPaths.ORDER_ID)
+            public java.lang.String order() {
+                return null;
+            }
+        }
+        """);
+
+    List<ApiEndpoint> endpoints =
+        sorted(
+            new ControllerEndpointSource(List.of(new SpringAnnotationResolver()))
+                .collect(getFixture().getProject()));
+
+    assertThat(endpoints)
+        .extracting(ApiEndpoint::method, ApiEndpoint::pathTemplate)
+        .contains(tuple(HttpMethod.GET, "/api/users"), tuple(HttpMethod.GET, "/api/orders/{id}"));
+  }
+
   private void addClass(String source) {
     getFixture().addClass(source);
   }

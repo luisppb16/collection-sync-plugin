@@ -39,19 +39,24 @@ endpoint, what is covered, what is missing and which requests have been left orp
   or `OPEN_API_AND_CONTROLLERS` (both are scanned and merged).
 - **OpenAPI file**: path of the OpenAPI 3.x document (used when the source type includes
   `OPEN_API`).
-- **Base path**: URL root (e.g. `/api/test/v1`) ignored on both sides before matching — collections
-  that write `{{baseUrl}}/api/test/v1/carro` and controllers that declare only `/carro` (or the
-  prefix on both sides) still match. A path that does not start with it is left untouched; leave
-  it empty for plain structural matching.
 - **Collection files**: Postman/Insomnia/OpenAPI files to compare against (add them here or from
   the tool window). The Module column can pin each file to a project module; `(auto)` infers it
-  from the file path and leaves the collection global when there is no unambiguous match.
+  from the file path and leaves the collection global when there is no unambiguous match. The
+  Base path column is the **full URL root** of that collection's requests (e.g.
+  `/api/proyecto/service-a`) and replaces the global root for that collection only. Leave it empty
+  to use the global root. Endpoints and exclusion rules are always normalized with the global root.
 - **Exclusions**: exclusion rules (method + path pattern, e.g. `GET /actuator/{name}`).
 
 ### 2. "CollectionSync" tool window
 
 Docked on the right, available in IDEs that ship the Java plugin:
 
+- **Root path**: URL root present in the collections but absent from the controller mappings (e.g.
+  `/api/proyecto`). It is ignored before matching, so `{{baseUrl}}/api/proyecto/users` matches a
+  controller declaring only `/users`. Press Enter or leave the field to apply it; the value is
+  persisted and the scan is relaunched when it changes. Empty means plain structural matching. A
+  value with no path segments (e.g. `https://host`) or made only of variables (e.g. `{{baseUrl}}`)
+  is rejected with a warning.
 - **Rescan**: recomputes coverage in the background.
 - **Select collections…**: adds collection files to the list and rescans.
 - **Export report**: saves the current report as Markdown (`.md`) or CSV (`.csv`).

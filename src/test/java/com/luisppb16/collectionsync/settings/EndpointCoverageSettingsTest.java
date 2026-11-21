@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.luisppb16.collectionsync.domain.model.ExclusionRule;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.CollectionBasePath;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.CollectionBinding;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.ExclusionEntry;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.SourceType;
@@ -18,6 +19,7 @@ import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.State;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,9 +48,11 @@ class EndpointCoverageSettingsTest {
     assertThat(state.openApiFilePath).isEmpty();
     assertThat(state.basePath).isEmpty();
     assertThat(state.collectionFilePaths).isEmpty();
+    assertThat(state.collectionBasePaths).isEmpty();
     assertThat(state.exclusions).isEmpty();
     assertThat(state.autoScanOnProjectOpen).isTrue();
     assertThat(settings.getBasePath()).isEmpty();
+    assertThat(settings.collectionBasePathsByPath()).isEmpty();
     assertThat(settings.isAutoScanOnProjectOpen()).isTrue();
     assertThat(settings.toRules()).isEmpty();
   }
@@ -96,6 +100,7 @@ class EndpointCoverageSettingsTest {
     loadedState.openApiFilePath = null;
     loadedState.basePath = null;
     loadedState.collectionFilePaths = null;
+    loadedState.collectionBasePaths = null;
     loadedState.exclusions = null;
 
     settings.loadState(loadedState);
@@ -105,6 +110,7 @@ class EndpointCoverageSettingsTest {
     assertThat(state.openApiFilePath).isEmpty();
     assertThat(state.basePath).isEmpty();
     assertThat(state.collectionFilePaths).isEmpty();
+    assertThat(state.collectionBasePaths).isEmpty();
     assertThat(state.exclusions).isEmpty();
     assertThat(settings.toRules()).isEmpty();
   }
@@ -208,6 +214,11 @@ class EndpointCoverageSettingsTest {
     assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isFalse();
 
     secondState.exclusions = new ArrayList<>();
+    secondState.collectionBasePaths =
+        new ArrayList<>(List.of(new CollectionBasePath("/repo/users.json", "/service-a")));
+    assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isFalse();
+
+    secondState.collectionBasePaths = new ArrayList<>();
     secondState.autoScanOnProjectOpen = false;
     assertThat(EndpointCoverageSettings.equalsState(firstState, secondState)).isFalse();
   }
@@ -270,6 +281,40 @@ class EndpointCoverageSettingsTest {
 
     assertThat(settings.getBasePath()).isEqualTo("/api/test/v1");
     assertThat(settings.getState().basePath).isEqualTo("/api/test/v1");
+  }
+
+  @Test
+  @DisplayName(
+      "Given per-collection base paths, when the state is loaded, then only known collections with a non-blank value survive")
+  void normalizesCollectionBasePathsOnLoad() {
+    State loadedState = new State();
+    loadedState.collectionFilePaths = new ArrayList<>(List.of("/repo/a.json", "/repo/b.json"));
+    loadedState.collectionBasePaths =
+        new ArrayList<>(
+            Arrays.asList(
+                new CollectionBasePath("/repo/a.json", " /service-a "),
+                new CollectionBasePath("/repo/b.json", "   "),
+                new CollectionBasePath("/repo/unknown.json", "/service-x"),
+                null));
+
+    settings.loadState(loadedState);
+
+    assertThat(settings.collectionBasePathsByPath())
+        .containsExactly(Map.entry("/repo/a.json", "/service-a"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given a state with a collection base path, when it is copied for update, then the entry is not shared")
+  void doesNotShareCollectionBasePathsWhenUpdatingState() {
+    State current = new State();
+    current.collectionFilePaths.add("/repo/users.json");
+    current.collectionBasePaths.add(new CollectionBasePath("/repo/users.json", "/service-a"));
+
+    State updated = EndpointCoverageSettings.copyForUpdate(current);
+    updated.collectionBasePaths.getFirst().setBasePath("/service-b");
+
+    assertThat(current.collectionBasePaths.getFirst().getBasePath()).isEqualTo("/service-a");
   }
 
   @Test

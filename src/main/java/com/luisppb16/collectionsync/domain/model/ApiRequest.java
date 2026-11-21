@@ -21,12 +21,24 @@ package com.luisppb16.collectionsync.domain.model;
  * @param name request name shown in the report; never null
  * @param collectionName name of the collection the request belongs to; never blank
  * @param moduleName module/service the collection is associated with, or empty when global
+ * @param basePath base path of the collection/service, stripped from the request before matching;
+ *     empty when the global base path applies
  */
 public record ApiRequest(
-    HttpMethod method, String rawUrl, String name, String collectionName, String moduleName) {
+    HttpMethod method,
+    String rawUrl,
+    String name,
+    String collectionName,
+    String moduleName,
+    String basePath) {
 
   public ApiRequest(HttpMethod method, String rawUrl, String name, String collectionName) {
-    this(method, rawUrl, name, collectionName, "");
+    this(method, rawUrl, name, collectionName, "", "");
+  }
+
+  public ApiRequest(
+      HttpMethod method, String rawUrl, String name, String collectionName, String moduleName) {
+    this(method, rawUrl, name, collectionName, moduleName, "");
   }
 
   public ApiRequest {
@@ -41,9 +53,14 @@ public record ApiRequest(
     }
     name = name == null ? "" : name;
     moduleName = moduleName == null ? "" : moduleName;
+    basePath = basePath == null ? "" : basePath;
   }
 
   public ApiRequest withModuleName(String moduleName) {
-    return new ApiRequest(method, rawUrl, name, collectionName, moduleName);
+    return new ApiRequest(method, rawUrl, name, collectionName, moduleName, basePath);
+  }
+
+  public ApiRequest withBasePath(String basePath) {
+    return new ApiRequest(method, rawUrl, name, collectionName, moduleName, basePath);
   }
 }

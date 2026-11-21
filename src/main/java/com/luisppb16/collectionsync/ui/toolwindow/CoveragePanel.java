@@ -19,6 +19,8 @@ import com.intellij.openapi.fileChooser.FileSaverDescriptor;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.ComboBox;
+import com.intellij.openapi.ui.ComponentValidator;
+import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
@@ -27,7 +29,9 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.table.JBTable;
+import com.intellij.util.Alarm;
 import com.intellij.util.ui.JBUI;
 import com.luisppb16.collectionsync.coverage.CoverageService;
 import com.luisppb16.collectionsync.domain.model.CoverageResult;
@@ -39,12 +43,15 @@ import com.luisppb16.collectionsync.domain.service.PathMatcher;
 import com.luisppb16.collectionsync.domain.service.PathNormalizer;
 import com.luisppb16.collectionsync.export.CoverageReportExporter;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
+import com.luisppb16.collectionsync.settings.BasePathValidator;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
@@ -76,8 +83,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Main panel of the "CollectionSync" tool window: toolbar (rescan, collections, export),
- * filters, summary, coverage table and its actions (navigation and exclusions).
+ * Main panel of the "CollectionSync" tool window: toolbar (rescan, collections, export), filters,
+ * summary, coverage table and its actions (navigation and exclusions).
  *
  * <p>Every UI mutation happens on the EDT; the heavy work is delegated to {@link CoverageService},
  * which scans in the background and calls back on the EDT.
@@ -85,6 +92,7 @@ import org.jetbrains.annotations.Nullable;
 public final class CoveragePanel extends JPanel {
 
   private static final long serialVersionUID = 1L;
+  private static final int BASE_PATH_APPLY_DELAY_MS = 300;
   private final transient Project project;
   private final transient CoverageService coverageService;
   private final transient EndpointCoverageSettings settings;
@@ -97,6 +105,10 @@ public final class CoveragePanel extends JPanel {
   private final JLabel summaryLabel =
       new JLabel(EndpointCoverageBundle.message("toolwindow.summary.empty"));
   private final JBTable table = new JBTable(tableModel);
+  private final JBTextField basePathField = new JBTextField();
+  private final transient Alarm basePathApplyAlarm;
+  private transient ComponentValidator basePathValidator;
+  private transient @Nullable ValidationInfo basePathValidation;
 
   /**
    * Stays {@code true} while the last scans keep reporting zero endpoints, so the warning is
@@ -118,7 +130,9 @@ public final class CoveragePanel extends JPanel {
     this.project = Objects.requireNonNull(project);
     this.coverageService = project.getService(CoverageService.class);
     this.settings = EndpointCoverageSettings.getInstance(project);
+    this.basePathApplyAlarm = new Alarm(Alarm.ThreadToUse.SWING_THREAD, project);
     buildUi();
+    syncBasePathField();
     if (settings.isAutoScanOnProjectOpen()) {
       rescan();
     }
@@ -196,6 +210,29 @@ public final class CoveragePanel extends JPanel {
               }
             }));
 
+    JPanel basePathRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    JLabel basePathLabel = new JLabel(EndpointCoverageBundle.message("toolwindow.base.path.label"));
+    basePathLabel.setLabelFor(basePathField);
+    basePathField.setColumns(28);
+    basePathField
+        .getEmptyText()
+        .setText(EndpointCoverageBundle.message("toolwindow.base.path.empty.text"));
+    basePathField.setToolTipText(EndpointCoverageBundle.message("toolwindow.base.path.comment"));
+    basePathField.addActionListener(actionEvent -> applyBasePathNow());
+    basePathField.addFocusListener(
+        new FocusAdapter() {
+          @Override
+          public void focusLost(FocusEvent event) {
+            scheduleBasePathApply();
+          }
+        });
+    basePathValidator =
+        new ComponentValidator(project)
+            .withValidator(() -> basePathValidation)
+            .installOn(basePathField);
+    basePathRow.add(basePathLabel);
+    basePathRow.add(basePathField);
+
     JPanel filterRow = new JPanel(new BorderLayout(8, 0));
     statusFilterCombo.addActionListener(actionEvent -> applyFilters());
     moduleFilterCombo.addItem(ModuleFilter.ALL);
@@ -231,6 +268,9 @@ public final class CoveragePanel extends JPanel {
     constraints.insets = JBUI.insets(0, 8, 4, 8);
     north.add(actionsRow, constraints);
     constraints.gridy = 2;
+    constraints.insets = JBUI.insets(0, 8, 4, 8);
+    north.add(basePathRow, constraints);
+    constraints.gridy = 3;
     constraints.insets = JBUI.insets(0, 8, 8, 8);
     north.add(filterRow, constraints);
     return north;
@@ -281,8 +321,74 @@ public final class CoveragePanel extends JPanel {
     coverageService.scanAsync(this::refresh);
   }
 
+  private void scheduleBasePathApply() {
+    basePathApplyAlarm.cancelAllRequests();
+    basePathApplyAlarm.addRequest(this::applyBasePath, BASE_PATH_APPLY_DELAY_MS);
+  }
+
+  private void applyBasePathNow() {
+    basePathApplyAlarm.cancelAllRequests();
+    applyBasePath();
+  }
+
+  private void applyBasePath() {
+    if (project.isDisposed()) {
+      return;
+    }
+    String value = basePathField.getText().strip();
+    BasePathValidator.Result validation = BasePathValidator.check(value);
+    if (validation == BasePathValidator.Result.NO_SEGMENTS) {
+      showBasePathWarning(
+          EndpointCoverageBundle.message("toolwindow.base.path.warning.no.segments"));
+      return;
+    }
+    if (validation == BasePathValidator.Result.VARIABLE_ONLY) {
+      showBasePathWarning(
+          EndpointCoverageBundle.message("toolwindow.base.path.warning.variable.only"));
+      return;
+    }
+    clearBasePathWarning();
+    if (!value.equals(settings.getBasePath().strip())) {
+      settings.update(state -> state.basePath = value);
+      rescan();
+    }
+  }
+
+  private void showBasePathWarning(@NotNull String message) {
+    basePathValidation = new ValidationInfo(message, basePathField).asWarning();
+    if (basePathValidator != null) {
+      basePathValidator.revalidate();
+    }
+  }
+
+  private void clearBasePathWarning() {
+    if (basePathValidation != null) {
+      basePathValidation = null;
+      if (basePathValidator != null) {
+        basePathValidator.revalidate();
+      }
+    }
+  }
+
+  private void syncBasePathField() {
+    if (basePathField.hasFocus() || basePathValidation != null) {
+      return;
+    }
+    String stored = settings.getBasePath();
+    if (!stored.equals(basePathField.getText().strip())) {
+      basePathField.setText(stored);
+    }
+  }
+
+  @Override
+  public void removeNotify() {
+    basePathApplyAlarm.cancelAllRequests();
+    super.removeNotify();
+  }
+
   /** Refreshes the summary and the table from the last scan snapshot; EDT only. */
   public void refresh() {
+    syncBasePathField();
     CoverageService.ScanOutput output = coverageService.lastScan();
     if (output == null) {
       summaryLabel.setText(EndpointCoverageBundle.message("toolwindow.summary.empty"));

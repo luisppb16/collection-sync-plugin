@@ -16,7 +16,10 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.IndexNotReadyException;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ProjectFileIndex;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
@@ -197,6 +200,17 @@ public final class ControllerEndpointSource implements EndpointSource {
     return endpoints;
   }
 
+  static boolean belongsToModule(PsiClass psiClass, Module module, ProjectFileIndex fileIndex) {
+    PsiFile containingFile = psiClass.getContainingFile();
+    if (containingFile == null) {
+      return false;
+    }
+    VirtualFile virtualFile = containingFile.getVirtualFile();
+    return virtualFile != null
+        && fileIndex.isInContent(virtualFile)
+        && fileIndex.getModuleForFile(virtualFile) == module;
+  }
+
   @Override
   public @NotNull List<ApiEndpoint> collect(@NotNull Project project) {
     // collectModules already WARN-logs every skipped module: the interface entry point needs no
@@ -241,16 +255,18 @@ public final class ControllerEndpointSource implements EndpointSource {
 
   private Stream<ApiEndpoint> endpointsOfModule(Module module) {
     PsiShortNamesCache namesCache = PsiShortNamesCache.getInstance(module.getProject());
+    ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(module.getProject());
     return Arrays.stream(namesCache.getAllClassNames())
         .distinct()
-        .flatMap(className -> endpointsOfNamedClass(className, module, namesCache))
+        .flatMap(className -> endpointsOfNamedClass(className, module, namesCache, fileIndex))
         .distinct();
   }
 
   private Stream<ApiEndpoint> endpointsOfNamedClass(
-      String className, Module module, PsiShortNamesCache namesCache) {
+      String className, Module module, PsiShortNamesCache namesCache, ProjectFileIndex fileIndex) {
     return Arrays.stream(
             namesCache.getClassesByName(className, GlobalSearchScope.moduleScope(module)))
+        .filter(psiClass -> belongsToModule(psiClass, module, fileIndex))
         .flatMap(psiClass -> endpointsOfController(psiClass, module));
   }
 

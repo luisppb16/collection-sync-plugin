@@ -16,9 +16,7 @@ import com.intellij.ui.content.ContentFactory;
 import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * Registers the "CollectionSync" tool window, available in IDEs that ship the Java plugin.
- */
+/** Registers the "CollectionSync" tool window, available in IDEs that ship the Java plugin. */
 public final class EndpointCoverageToolWindowFactory implements ToolWindowFactory, DumbAware {
 
   /**

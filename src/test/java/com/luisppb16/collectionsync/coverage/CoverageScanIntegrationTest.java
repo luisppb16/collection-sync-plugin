@@ -18,6 +18,7 @@ import com.luisppb16.collectionsync.domain.model.CoverageRow;
 import com.luisppb16.collectionsync.domain.model.CoverageStatus;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings;
+import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.CollectionBasePath;
 import com.luisppb16.collectionsync.settings.EndpointCoverageSettings.ExclusionEntry;
 import com.luisppb16.collectionsync.test.PsiTestCase;
 import java.io.IOException;
@@ -227,6 +228,25 @@ class CoverageScanIntegrationTest extends PsiTestCase {
 
   @Test
   @DisplayName(
+      "Given a per-collection base path in the settings, when a scan runs, "
+          + "then the collection root is applied end to end")
+  void coversCollectionRequestsUnderConfiguredCollectionBasePath() throws IOException {
+    addClass(CARRO_CONTROLLER);
+    Path collection = write("carro.json", POSTMAN_CARRO_COLLECTION);
+    configureSettingsWithCollectionBasePath(
+        "", List.of(collection.toString()), collection.toString(), "/api/test/v1");
+    CoverageService service = new CoverageService(getFixture().getProject());
+
+    CoverageResult result = service.scan();
+
+    assertThat(result.coveredCount()).isEqualTo(1);
+    assertThat(result.uncoveredCount()).isZero();
+    assertThat(result.orphanCount()).isZero();
+    assertThat(Objects.requireNonNull(service.lastScan()).errors()).isEmpty();
+  }
+
+  @Test
+  @DisplayName(
       "Given the same fixtures with an empty base path, when a scan runs, "
           + "then the endpoint stays uncovered and the request stays orphaned")
   void keepsPairUncoveredWithoutConfiguredBasePath() throws IOException {
@@ -386,6 +406,18 @@ class CoverageScanIntegrationTest extends PsiTestCase {
     state.basePath = basePath;
     state.collectionFilePaths.addAll(collectionPaths);
     state.exclusions.addAll(exclusions);
+    EndpointCoverageSettings.getInstance(getFixture().getProject()).setState(state);
+  }
+
+  private void configureSettingsWithCollectionBasePath(
+      String basePath,
+      List<String> collectionPaths,
+      String collectionPath,
+      String collectionBasePath) {
+    EndpointCoverageSettings.State state = new EndpointCoverageSettings.State();
+    state.basePath = basePath;
+    state.collectionFilePaths.addAll(collectionPaths);
+    state.collectionBasePaths.add(new CollectionBasePath(collectionPath, collectionBasePath));
     EndpointCoverageSettings.getInstance(getFixture().getProject()).setState(state);
   }
 

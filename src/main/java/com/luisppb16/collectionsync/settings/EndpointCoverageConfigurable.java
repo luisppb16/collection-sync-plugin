@@ -19,7 +19,6 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.ui.TitledSeparator;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBCheckBox;
-import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
 import com.luisppb16.collectionsync.i18n.EndpointCoverageBundle;
@@ -43,8 +42,8 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Swing settings page that edits {@link EndpointCoverageSettings.State}: the automatic scan on
- * project open, the endpoint source type, the OpenAPI document path, the base path ignored on both
- * sides when matching, the collection files and the exclusion rules.
+ * project open, the endpoint source type, the OpenAPI document path, the collection files and the
+ * exclusion rules. The global base path is edited from the tool window and only preserved here.
  *
  * <p>The diff logic (is/apply/reset) goes through the pure {@link
  * EndpointCoverageSettings#equalsState}, comparing the persisted state against the state
@@ -57,7 +56,6 @@ public final class EndpointCoverageConfigurable implements Configurable {
   private ComboBox<EndpointCoverageSettings.SourceType> sourceTypeCombo;
   private JBCheckBox autoScanCheckBox;
   private TextFieldWithBrowseButton openApiField;
-  private JBTextField basePathField;
   private javax.swing.table.DefaultTableModel collectionModel;
   private javax.swing.table.DefaultTableModel exclusionsModel;
   private JPanel mainPanel;
@@ -136,19 +134,18 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 .withTitle(EndpointCoverageBundle.message("settings.openapi.chooser.title"))
                 .withDescription(
                     EndpointCoverageBundle.message("settings.openapi.chooser.description"))));
-    basePathField = new JBTextField();
-    basePathField.setToolTipText(EndpointCoverageBundle.message("settings.base.path.comment"));
 
     collectionModel =
         new javax.swing.table.DefaultTableModel(
             new Object[] {
               EndpointCoverageBundle.message("settings.collections.column.path"),
-              EndpointCoverageBundle.message("settings.collections.column.module")
+              EndpointCoverageBundle.message("settings.collections.column.module"),
+              EndpointCoverageBundle.message("settings.collections.column.base.path")
             },
             0) {
           @Override
           public boolean isCellEditable(int row, int column) {
-            return column == 1;
+            return column == 1 || column == 2;
           }
         };
     JTable collectionTable = new JTable(collectionModel);
@@ -193,8 +190,6 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 EndpointCoverageBundle.message("settings.source.type.label"), sourceTypeCombo)
             .addLabeledComponent(
                 EndpointCoverageBundle.message("settings.openapi.label"), openApiField)
-            .addLabeledComponent(
-                EndpointCoverageBundle.message("settings.base.path.label"), basePathField)
             .addComponent(
                 new TitledSeparator(EndpointCoverageBundle.message("settings.collections.title")))
             .addComponent(collectionsPanel)
@@ -211,7 +206,7 @@ public final class EndpointCoverageConfigurable implements Configurable {
         project,
         null,
         virtualFile ->
-            collectionModel.addRow(new Object[] {virtualFile.getPath(), autoModuleLabel()}));
+            collectionModel.addRow(new Object[] {virtualFile.getPath(), autoModuleLabel(), ""}));
   }
 
   private void removeSelectedRows(JTable table, javax.swing.table.DefaultTableModel model) {
@@ -241,9 +236,10 @@ public final class EndpointCoverageConfigurable implements Configurable {
                 (EndpointCoverageSettings.SourceType) sourceTypeCombo.getSelectedItem())
             .name();
     state.openApiFilePath = openApiField.getText().strip();
-    state.basePath = basePathField.getText().strip();
+    state.basePath = EndpointCoverageSettings.getInstance(project).getBasePath();
     List<String> collectionPaths = new ArrayList<>();
     List<EndpointCoverageSettings.CollectionBinding> collectionBindings = new ArrayList<>();
+    List<EndpointCoverageSettings.CollectionBasePath> collectionBasePaths = new ArrayList<>();
     String autoModule = autoModuleLabel();
     for (int row = 0; row < collectionModel.getRowCount(); row++) {
       String path = Objects.toString(collectionModel.getValueAt(row, 0), "").strip();
@@ -255,9 +251,14 @@ public final class EndpointCoverageConfigurable implements Configurable {
       if (!module.isEmpty() && !module.equals(autoModule)) {
         collectionBindings.add(new EndpointCoverageSettings.CollectionBinding(path, module));
       }
+      String basePath = Objects.toString(collectionModel.getValueAt(row, 2), "").strip();
+      if (!basePath.isEmpty()) {
+        collectionBasePaths.add(new EndpointCoverageSettings.CollectionBasePath(path, basePath));
+      }
     }
     state.collectionFilePaths = collectionPaths;
     state.collectionBindings = collectionBindings;
+    state.collectionBasePaths = collectionBasePaths;
     state.exclusions =
         IntStream.range(0, exclusionsModel.getRowCount())
             .mapToObj(row ->
@@ -271,15 +272,20 @@ public final class EndpointCoverageConfigurable implements Configurable {
     autoScanCheckBox.setSelected(state.autoScanOnProjectOpen);
     sourceTypeCombo.setSelectedItem(EndpointCoverageSettings.SourceType.from(state.sourceType));
     openApiField.setText(state.openApiFilePath);
-    basePathField.setText(state.basePath);
     Map<String, String> bindings =
         EndpointCoverageSettings.getInstance(project).collectionBindingsByPath();
+    Map<String, String> basePaths =
+        EndpointCoverageSettings.getInstance(project).collectionBasePathsByPath();
     String autoModule = autoModuleLabel();
     collectionModel.setRowCount(0);
     for (String path : state.collectionFilePaths) {
       String module = bindings.get(path);
       collectionModel.addRow(
-          new Object[] {path, module == null || module.isBlank() ? autoModule : module});
+          new Object[] {
+            path,
+            module == null || module.isBlank() ? autoModule : module,
+            basePaths.getOrDefault(path, "")
+          });
     }
     exclusionsModel.setRowCount(0);
     state.exclusions.forEach(

@@ -68,10 +68,14 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends optional="true" config-file="withJava.xml">com.intellij.modules.java</depends>
-    <depends optional="true">org.jetbrains.kotlin</depends>
+    <depends optional="true" config-file="withKotlin.xml">org.jetbrains.kotlin</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="CollectionSync Notifications"
                            displayType="BALLOON"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
     </extensions>
 </idea-plugin>

@@ -10,6 +10,7 @@ package com.luisppb16.collectionsync.coverage;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.luisppb16.collectionsync.coverage.CoverageService.CollectionInput;
 import com.luisppb16.collectionsync.coverage.CoverageService.ScanOutput;
 import com.luisppb16.collectionsync.domain.model.ApiEndpoint;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
@@ -72,6 +73,99 @@ class CoverageServiceTest {
     assertThat(output.result().orphanCount()).isEqualTo(2);
     assertThat(output.result().collectionCount()).isEqualTo(1);
     assertThat(output.result().rows()).isNotEmpty();
+  }
+
+  @Test
+  @DisplayName(
+      "Given collections bound to services with their own base paths, when the scan is computed, then each request is matched with its service prefix")
+  void appliesCollectionBasePathsWhenScanning() throws IOException {
+    Path serviceA =
+        write(
+            "service-a.json",
+            """
+            {"info": {"name": "Service A"}, "item": [
+              {"name": "Users", "request": {"method": "GET", "url": "{{baseUrl}}/service-a/users"}}
+            ]}\
+            """);
+    Path serviceB =
+        write(
+            "service-b.json",
+            """
+            {"info": {"name": "Service B"}, "item": [
+              {"name": "Orders", "request": {"method": "GET", "url": "{{baseUrl}}/service-b/orders"}}
+            ]}\
+            """);
+    List<ApiEndpoint> serviceEndpoints =
+        List.of(
+            new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "service-a", null),
+            new ApiEndpoint(HttpMethod.GET, "/orders", "OrderController", "service-b", null));
+
+    ScanOutput output =
+        CoverageService.computeScanWithModules(
+            serviceEndpoints,
+            List.of(
+                new CollectionInput(serviceA.toFile(), "service-a", "/service-a"),
+                new CollectionInput(serviceB.toFile(), "service-b", "/service-b")),
+            List.of(),
+            "",
+            List.of());
+
+    assertThat(output.result().coveredCount()).isEqualTo(2);
+    assertThat(output.result().orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection base path and a global one, when the scan is computed, then the collection replaces the global")
+  void collectionBasePathReplacesGlobalBasePathInScan() throws IOException {
+    Path collection =
+        write(
+            "service-a.json",
+            """
+            {"info": {"name": "Service A"}, "item": [
+              {"name": "Users", "request": {"method": "GET", "url": "{{baseUrl}}/service-a/users"}}
+            ]}\
+            """);
+    List<ApiEndpoint> endpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "service-a", null));
+
+    ScanOutput output =
+        CoverageService.computeScanWithModules(
+            endpoints,
+            List.of(new CollectionInput(collection.toFile(), "service-a", "/service-a")),
+            List.of(),
+            "/api",
+            List.of());
+
+    assertThat(output.result().coveredCount()).isEqualTo(1);
+    assertThat(output.result().orphanCount()).isZero();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection without its own base path, when the scan is computed, then the global one applies")
+  void fallsBackToGlobalBasePathInScan() throws IOException {
+    Path collection =
+        write(
+            "global.json",
+            """
+            {"info": {"name": "Global"}, "item": [
+              {"name": "Users", "request": {"method": "GET", "url": "{{baseUrl}}/api/users"}}
+            ]}\
+            """);
+    List<ApiEndpoint> endpoints =
+        List.of(new ApiEndpoint(HttpMethod.GET, "/users", "UserController", "service-a", null));
+
+    ScanOutput output =
+        CoverageService.computeScanWithModules(
+            endpoints,
+            List.of(new CollectionInput(collection.toFile(), "service-a", "  ")),
+            List.of(),
+            "/api",
+            List.of());
+
+    assertThat(output.result().coveredCount()).isEqualTo(1);
+    assertThat(output.result().orphanCount()).isZero();
   }
 
   @Test

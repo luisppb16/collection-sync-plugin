@@ -29,12 +29,13 @@ import java.util.regex.Pattern;
  *   <li><b>Strip scheme and host.</b> If the input contains {@code ://} (e.g. {@code
  *       https://api.example.com/users/1}), everything up to the first {@code /} after the scheme is
  *       discarded, leaving only the path. A bare host yields zero segments.
- *   <li><b>Drop host-like variable.</b> Collections frequently write {@code {{baseUrl}}/users/:id}
- *       or {@code {{ _.base_url }}/users} without a scheme, so the host appears as a leading
- *       variable segment of a path that does not start with {@code /}. When the input does not
- *       start with {@code /} and its first segment is variable-like (see rule 6), that first
- *       segment is dropped as a host placeholder. Relative paths starting with a literal segment
- *       are never touched.
+ *   <li><b>Drop host-like first segment.</b> Collections frequently write {@code
+ *       {{baseUrl}}/users/:id} or {@code {{ _.base_url }}/users} without a scheme, so the host
+ *       appears as a leading variable segment of a path that does not start with {@code /}. The
+ *       same happens when a resolved variable yields {@code localhost:8080/users}. When the input
+ *       does not start with {@code /} and its first segment is a variable or a {@code host:port}
+ *       authority, that first segment is dropped as a host placeholder. Relative paths starting
+ *       with a literal segment are never touched.
  *   <li><b>Split on {@code /}.</b> Empty segments are removed, which in particular ignores a
  *       trailing slash: {@code /users/} and {@code /users} are the same path.
  *   <li><b>Classify each segment</b> as {@link Literal} or {@link Variable}. A whole segment is a
@@ -60,6 +61,7 @@ public final class PathNormalizer {
   private static final Pattern BRACES =
       Pattern.compile("^\\{\\s*([^{}\\s]+)\\s*(?::\\s*([^{}]*)\\s*)?}$");
   private static final Pattern COLON = Pattern.compile("^:[A-Za-z_][A-Za-z0-9_-]*$");
+  private static final Pattern HOST_WITH_PORT = Pattern.compile("^[A-Za-z0-9._-]+:\\d+$");
   private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
   private PathNormalizer() {}
@@ -80,10 +82,12 @@ public final class PathNormalizer {
       return List.of();
     }
     List<String> rawSegments = List.of(path.split("/"));
-    boolean hostLikeVariable =
-        !path.startsWith("/") && rawSegments.size() > 1 && isVariable(rawSegments.getFirst());
+    boolean hostLikeFirstSegment =
+        !path.startsWith("/")
+            && (HOST_WITH_PORT.matcher(rawSegments.getFirst()).matches()
+                || (rawSegments.size() > 1 && isVariable(rawSegments.getFirst())));
     List<String> segments =
-        hostLikeVariable ? rawSegments.subList(1, rawSegments.size()) : rawSegments;
+        hostLikeFirstSegment ? rawSegments.subList(1, rawSegments.size()) : rawSegments;
     return segments.stream()
         .filter(segment -> !segment.isEmpty())
         .map(PathNormalizer::classify)
@@ -132,5 +136,17 @@ public final class PathNormalizer {
     return HANDLEBARS.matcher(rawSegment).matches()
         || BRACES.matcher(rawSegment).matches()
         || COLON.matcher(rawSegment).matches();
+  }
+
+  /**
+   * Reports whether every segment is a variable, which makes the list useless as a URL root: it
+   * would strip the first segment of any path.
+   *
+   * @param segments normalized segments; must not be null
+   * @return true when the list is non-empty and contains no literal segment
+   */
+  public static boolean isVariableOnly(List<Segment> segments) {
+    return !segments.isEmpty()
+        && segments.stream().allMatch(segment -> segment instanceof Variable);
   }
 }

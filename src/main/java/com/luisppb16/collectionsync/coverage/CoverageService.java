@@ -190,7 +190,10 @@ public final class CoverageService {
       return requests.isEmpty()
           ? requests
           : requests.stream()
-              .map(request -> request.withModuleName(collection.moduleName()))
+              .map(request ->
+                  request
+                      .withModuleName(collection.moduleName())
+                      .withBasePath(collection.basePath()))
               .toList();
     } catch (IOException | IllegalArgumentException brokenFile) {
       errors.add(
@@ -229,11 +232,13 @@ public final class CoverageService {
             .map(Module::getName)
             .toList();
     Map<String, String> explicitModules = settings.collectionBindingsByPath();
+    Map<String, String> collectionBasePaths = settings.collectionBasePathsByPath();
     return settings.getCollectionFilePaths().stream()
         .map(path ->
             new CollectionInput(
                 new File(path),
-                CollectionModuleResolver.resolve(path, explicitModules.get(path), moduleNames)))
+                CollectionModuleResolver.resolve(path, explicitModules.get(path), moduleNames),
+                collectionBasePaths.getOrDefault(path, "")))
         .toList();
   }
 
@@ -402,12 +407,17 @@ public final class CoverageService {
 
   private record EndpointKey(HttpMethod method, String path, String module) {}
 
-  /** A collection file plus the module/service it is associated with (empty means global). */
-  public record CollectionInput(File file, String moduleName) {
+  /** A collection file plus the module/service and base path it is associated with. */
+  public record CollectionInput(File file, String moduleName, String basePath) {
+
+    public CollectionInput(File file, String moduleName) {
+      this(file, moduleName, "");
+    }
 
     public CollectionInput {
       Objects.requireNonNull(file, "file must not be null");
       moduleName = moduleName == null ? "" : moduleName;
+      basePath = basePath == null ? "" : basePath;
     }
   }
 

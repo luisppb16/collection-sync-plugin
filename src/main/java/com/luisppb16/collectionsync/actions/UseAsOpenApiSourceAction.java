@@ -23,8 +23,8 @@ import java.util.Objects;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * "CollectionSync: Use as OpenAPI Source": available on files the IDE recognizes as JSON, YAML
- * or plain text; validates that the file is an OpenAPI 3.x document (an object with {@code paths})
+ * "CollectionSync: Use as OpenAPI Source": available on files the IDE recognizes as JSON, YAML or
+ * plain text; validates that the file is an OpenAPI 3.x document (an object with {@code paths})
  * and, when valid, sets it as the endpoint source and rescans.
  */
 public final class UseAsOpenApiSourceAction extends AnAction {

@@ -8,11 +8,11 @@
 package com.luisppb16.collectionsync.scan;
 
 import com.intellij.codeInsight.MetaAnnotationUtil;
+import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
 import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiLiteralExpression;
 import com.intellij.psi.PsiModifierList;
 import com.intellij.psi.PsiModifierListOwner;
 import java.util.ArrayDeque;
@@ -38,12 +38,12 @@ final class EndpointAnnotationResolvers {
     }
     if (value instanceof PsiArrayInitializerMemberValue array) {
       return Arrays.stream(array.getInitializers())
-          .map(EndpointAnnotationResolvers::literalString)
+          .map(EndpointAnnotationResolvers::constantString)
           .filter(Objects::nonNull)
           .map(String::strip)
           .toList();
     }
-    String text = literalString(value);
+    String text = constantString(value);
     return text == null ? List.of() : List.of(text.strip());
   }
 
@@ -88,11 +88,11 @@ final class EndpointAnnotationResolvers {
         && MetaAnnotationUtil.isMetaAnnotated(annotationType, qualifiedNames);
   }
 
-  private static String literalString(PsiAnnotationMemberValue value) {
-    if (value instanceof PsiLiteralExpression literal
-        && literal.getValue() instanceof String text) {
-      return text;
-    }
-    return null;
+  private static String constantString(PsiAnnotationMemberValue value) {
+    Object constant =
+        JavaPsiFacade.getInstance(value.getProject())
+            .getConstantEvaluationHelper()
+            .computeConstantExpression(value);
+    return constant instanceof String text ? text : null;
   }
 }

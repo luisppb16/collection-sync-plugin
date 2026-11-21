@@ -58,6 +58,11 @@ class PathNormalizerTest {
         Arguments.of("/users/{ id }", List.of(literal("users"), variable("{id}"))),
         Arguments.of("users/{id}", List.of(literal("users"), variable("{id}"))),
         Arguments.of("/users/{id}", List.of(literal("users"), variable("{id}"))),
+        Arguments.of("host:8080/api/x", List.of(literal("api"), literal("x"))),
+        Arguments.of("localhost:8080/users", List.of(literal("users"))),
+        Arguments.of("127.0.0.1:8080/users/1", List.of(literal("users"), literal("1"))),
+        Arguments.of("host:8080", List.of()),
+        Arguments.of("v1.0/users", List.of(literal("v1.0"), literal("users"))),
         Arguments.of("//users//17/", List.of(literal("users"), literal("17"))));
   }
 
@@ -109,6 +114,16 @@ class PathNormalizerTest {
   @DisplayName("Given non-variable segments, when checked, then they are kept as literals")
   void keepsNonVariableSegmentsAsLiterals(String rawSegment) {
     assertThat(PathNormalizer.isVariable(rawSegment)).isFalse();
+  }
+
+  @Test
+  @DisplayName(
+      "Given normalized segments, when checked for variable-only, then only all-variable lists are detected")
+  void detectsVariableOnlySegments() {
+    assertThat(PathNormalizer.isVariableOnly(List.of(variable("{{baseUrl}}")))).isTrue();
+    assertThat(PathNormalizer.isVariableOnly(List.of(variable("{id}"), variable(":id")))).isTrue();
+    assertThat(PathNormalizer.isVariableOnly(List.of(literal("api"), variable("{id}")))).isFalse();
+    assertThat(PathNormalizer.isVariableOnly(List.of())).isFalse();
   }
 
   @Test

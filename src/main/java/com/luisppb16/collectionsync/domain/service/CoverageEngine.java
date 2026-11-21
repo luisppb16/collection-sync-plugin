@@ -34,8 +34,9 @@ import java.util.stream.Stream;
  *
  * <ol>
  *   <li>Every endpoint path, request URL and exclusion pattern is normalized once through {@link
- *       PathNormalizer}; when a base path is configured, its normalized segments are stripped from
- *       the root of all three ({@link PathMatcher#stripPrefix}).
+ *       PathNormalizer}. Endpoints and exclusion patterns have the global base path stripped from
+ *       their root; a request uses the base path of its collection when present, and the global
+ *       base path otherwise ({@link PathMatcher#stripPrefix}).
  *   <li><b>Exclusions first.</b> An endpoint is excluded when some {@link ExclusionRule} has the
  *       same HTTP method and strictly matches its path ({@link PathMatcher#matchesStrict}).
  *   <li><b>Endpoint classification.</b> A non-excluded endpoint is COVERED when at least one
@@ -72,7 +73,7 @@ public final class CoverageEngine {
       List<ExclusionRule> exclusions,
       String basePath) {
     Objects.requireNonNull(basePath, "basePath must not be null");
-    List<Segment> basePathSegments = PathNormalizer.normalize(basePath);
+    List<Segment> basePathSegments = usableBasePath(basePath);
     List<Rule> rules =
         exclusions.stream()
             .map(rule ->
@@ -94,9 +95,7 @@ public final class CoverageEngine {
     List<Shape> includedShapes = shapesByExcluded.get(Boolean.FALSE);
     List<RequestShape> requestShapes =
         requests.stream()
-            .map(request ->
-                new RequestShape(
-                    request, normalizeAgainstBasePath(request.rawUrl(), basePathSegments)))
+            .map(request -> new RequestShape(request, normalizeRequest(request, basePathSegments)))
             .toList();
 
     Map<Integer, List<Shape>> includedBySize = bySize(includedShapes);
@@ -187,6 +186,24 @@ public final class CoverageEngine {
   private static List<Segment> normalizeAgainstBasePath(
       String raw, List<Segment> basePathSegments) {
     return PathMatcher.stripPrefix(PathNormalizer.normalize(raw), basePathSegments);
+  }
+
+  /**
+   * Normalizes a request URL. A collection base path replaces the global one when present; an empty
+   * collection base path falls back to the global value configured in the settings.
+   */
+  private static List<Segment> normalizeRequest(
+      ApiRequest request, List<Segment> globalBasePathSegments) {
+    List<Segment> collectionBasePathSegments = usableBasePath(request.basePath());
+    List<Segment> effectiveBasePathSegments =
+        collectionBasePathSegments.isEmpty() ? globalBasePathSegments : collectionBasePathSegments;
+    return PathMatcher.stripPrefix(
+        PathNormalizer.normalize(request.rawUrl()), effectiveBasePathSegments);
+  }
+
+  private static List<Segment> usableBasePath(String raw) {
+    List<Segment> segments = PathNormalizer.normalize(raw);
+    return PathNormalizer.isVariableOnly(segments) ? List.of() : segments;
   }
 
   private static CoverageRow rowOf(ApiEndpoint endpoint, CoverageStatus status) {
