@@ -120,10 +120,21 @@ test {
     javaLauncher = javaToolchains.launcherFor {
         languageVersion = JavaLanguageVersion.of(25)
     }
+    // The IntelliJ test runtime sets java.system.class.loader to the platform
+    // PathClassLoader, which leaves plugin classes without a code source: JaCoCo skips them
+    // unless no-location classes are included. JDK internals are excluded so the agent does
+    // not try to instrument the module system.
+    jacoco {
+        includeNoLocationClasses = true
+        excludes = ['jdk.internal.*']
+    }
 }
 
 jacocoTestReport {
     dependsOn test
+    // Tests load the instrumented classes, not the plain compiler output, so the report must
+    // analyze the same bytecode or the class ids in the execution data never match.
+    classDirectories.setFrom(tasks.named('instrumentCode'))
     reports {
         xml.required = true
         html.required = true

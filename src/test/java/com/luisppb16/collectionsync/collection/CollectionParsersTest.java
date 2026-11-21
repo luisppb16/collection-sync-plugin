@@ -12,8 +12,10 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.luisppb16.collectionsync.domain.model.ApiRequest;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
+import com.luisppb16.collectionsync.io.JsonYaml;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -313,5 +315,90 @@ class CollectionParsersTest {
   @DisplayName("Given a null file, when the one-shot parse is used, then it fails fast")
   void parseFailsFastOnNull() {
     assertThatIllegalArgumentException().isThrownBy(() -> CollectionParsers.parse(null));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "users.json, users",
+    "users.postman_collection.json, users.postman_collection",
+    "users, users",
+    ".json, .json"
+  })
+  @DisplayName(
+      "Given a file name, when the base name is read, then only the last extension is dropped")
+  void readsFileBaseName(String fileName, String expected) {
+    assertThat(CollectionParsers.fileBaseName(fileName)).isEqualTo(expected);
+  }
+
+  @Test
+  @DisplayName(
+      "Given an info node with a name, when the display name is read, then the stripped name wins")
+  void readsDisplayNameFromNode() throws IOException {
+    assertThat(
+            CollectionParsers.displayNameOrFileBase(
+                parse("{\"name\": \"  Users API  \"}"), file("users.json")))
+        .isEqualTo("Users API");
+  }
+
+  @Test
+  @DisplayName(
+      "Given an info node without a name, when the display name is read, then the file base name is used")
+  void fallsBackToFileBaseNameForDisplayName() throws IOException {
+    assertThat(CollectionParsers.displayNameOrFileBase(parse("{}"), file("users.json")))
+        .isEqualTo("users");
+    assertThat(
+            CollectionParsers.displayNameOrFileBase(
+                parse("{\"name\": \"  \"}"), file("users.json")))
+        .isEqualTo("users");
+  }
+
+  @Test
+  @DisplayName(
+      "Given an info node with a title, when the display title is read, then the title wins over the file name")
+  void readsDisplayTitleFromNode() throws IOException {
+    assertThat(
+            CollectionParsers.displayTitleOrFileBase(
+                parse("{\"title\": \"Carro API\"}"), file("carro.json")))
+        .isEqualTo("Carro API");
+    assertThat(
+            CollectionParsers.displayTitleOrFileBase(
+                parse("{\"name\": \"Users\"}"), file("carro.json")))
+        .isEqualTo("carro");
+  }
+
+  private File file(String name) {
+    return tempDir.resolve(name).toFile();
+  }
+
+  @Test
+  @DisplayName(
+      "Given an OpenAPI document, when the one-shot parse is used, then its operations become requests")
+  void parsesOpenApiFileAsCollection() throws IOException {
+    Path path = tempDir.resolve("openapi.json");
+    Files.writeString(path, "{\"openapi\": \"3.0.0\", \"paths\": {\"/ping\": {\"get\": {}}}}");
+
+    assertThat(CollectionParsers.parse(path.toFile()))
+        .extracting(ApiRequest::rawUrl)
+        .containsExactly("/ping");
+  }
+
+  @Test
+  @DisplayName(
+      "Given a bare request array, when the one-shot parse is used, then it is read as an Insomnia export")
+  void parsesBareArrayAsInsomnia() throws IOException {
+    Path path = tempDir.resolve("array.json");
+    Files.writeString(
+        path,
+        """
+        [{"_type": "request", "name": "Ping", "method": "GET", "url": "/ping"}]\
+        """);
+
+    assertThat(CollectionParsers.parse(path.toFile()))
+        .extracting(ApiRequest::rawUrl)
+        .containsExactly("/ping");
+  }
+
+  private JsonNode parse(String content) throws IOException {
+    return JsonYaml.parse(content);
   }
 }

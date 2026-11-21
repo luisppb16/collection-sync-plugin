@@ -297,6 +297,18 @@ class CoverageServiceTest {
         .hasMessageContaining("basePath");
   }
 
+  @Test
+  @DisplayName(
+      "Given a collection input without module or base path, when it is built, then both default to empty")
+  void normalizesMissingCollectionInputValues() {
+    CollectionInput shortInput = new CollectionInput(tempDir.toFile(), null);
+
+    assertThat(shortInput.moduleName()).isEmpty();
+    assertThat(shortInput.basePath()).isEmpty();
+    assertThat(shortInput.file()).isEqualTo(tempDir.toFile());
+    assertThat(new CollectionInput(tempDir.toFile(), "app").moduleName()).isEqualTo("app");
+  }
+
   private Path write(String fileName, String content) throws IOException {
     Path path = tempDir.resolve(fileName);
     Files.writeString(path, content);

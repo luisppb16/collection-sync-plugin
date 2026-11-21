@@ -8,6 +8,7 @@
 package com.luisppb16.collectionsync.settings;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import com.luisppb16.collectionsync.domain.model.ExclusionRule;
 import com.luisppb16.collectionsync.domain.model.HttpMethod;
@@ -331,5 +332,145 @@ class EndpointCoverageSettingsTest {
     assertThat(entry).isEqualTo(new ExclusionEntry("POST", "/internal"));
     assertThat(entry).isNotEqualTo(new ExclusionEntry("GET", "/internal"));
     assertThat(entry).hasSameHashCodeAs(new ExclusionEntry("POST", "/internal"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given collection bindings of mixed validity, when the state is loaded, then only known, bound and unique paths survive")
+  void normalizesCollectionBindingsOnLoad() {
+    State loadedState = new State();
+    loadedState.collectionFilePaths = new ArrayList<>(List.of("/repo/a.json", "/repo/b.json"));
+    loadedState.collectionBindings =
+        new ArrayList<>(
+            Arrays.asList(
+                new CollectionBinding("/repo/a.json", "service-a"),
+                new CollectionBinding("/repo/a.json", "service-duplicate"),
+                new CollectionBinding("/repo/unknown.json", "service-x"),
+                new CollectionBinding(null, "service-y"),
+                new CollectionBinding("/repo/b.json", "   "),
+                null));
+
+    settings.loadState(loadedState);
+
+    assertThat(settings.collectionBindingsByPath())
+        .containsExactly(Map.entry("/repo/a.json", "service-a"));
+  }
+
+  @Test
+  @DisplayName(
+      "Given the no-argument entry bean, when setters are used, then it behaves like the value constructor")
+  void supportsDefaultConstructionOfEntries() {
+    ExclusionEntry entry = new ExclusionEntry();
+
+    entry.setMethod("GET");
+    entry.setPathPattern("/actuator");
+
+    assertThat(entry).isEqualTo(new ExclusionEntry("GET", "/actuator"));
+    assertThat(new ExclusionEntry().equals(new ExclusionEntry())).isTrue();
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection binding bean, when accessors are used, then values round-trip and equality holds")
+  void roundTripsCollectionBindings() {
+    CollectionBinding binding = new CollectionBinding("/repo/users.json", "service-a");
+
+    binding.setPath("/repo/orders.json");
+    binding.setModuleName("service-b");
+
+    assertThat(binding.getPath()).isEqualTo("/repo/orders.json");
+    assertThat(binding.getModuleName()).isEqualTo("service-b");
+    assertThat(binding).isEqualTo(new CollectionBinding("/repo/orders.json", "service-b"));
+    assertThat(binding).isNotEqualTo(new CollectionBinding("/repo/users.json", "service-b"));
+    assertThat(binding).hasSameHashCodeAs(new CollectionBinding("/repo/orders.json", "service-b"));
+    assertThat(binding).isNotEqualTo("another type");
+    assertThat(new CollectionBinding()).isNotEqualTo(binding);
+  }
+
+  @Test
+  @DisplayName(
+      "Given a collection base path bean, when accessors are used, then values round-trip and equality holds")
+  void roundTripsCollectionBasePathBeans() {
+    CollectionBasePath entry = new CollectionBasePath("/repo/users.json", "/service-a");
+
+    entry.setPath("/repo/orders.json");
+    entry.setBasePath("/service-b");
+
+    assertThat(entry.getPath()).isEqualTo("/repo/orders.json");
+    assertThat(entry.getBasePath()).isEqualTo("/service-b");
+    assertThat(entry).isEqualTo(new CollectionBasePath("/repo/orders.json", "/service-b"));
+    assertThat(entry).isNotEqualTo(new CollectionBasePath("/repo/users.json", "/service-b"));
+    assertThat(entry).hasSameHashCodeAs(new CollectionBasePath("/repo/orders.json", "/service-b"));
+    assertThat(entry).isNotEqualTo("another type");
+    assertThat(new CollectionBasePath()).isNotEqualTo(entry);
+  }
+
+  @Test
+  @DisplayName(
+      "Given a persisted source type and OpenAPI path, when they round-trip, then the typed accessors reflect them")
+  void exposesSourceTypeAndOpenApiPath() {
+    State configured = new State();
+    configured.sourceType = SourceType.OPEN_API.name();
+    configured.openApiFilePath = "/repo/openapi.yaml";
+
+    settings.setState(configured);
+
+    assertThat(settings.getSourceType()).isEqualTo(SourceType.OPEN_API);
+    assertThat(settings.getOpenApiFilePath()).isEqualTo("/repo/openapi.yaml");
+  }
+
+  @Test
+  @DisplayName(
+      "Given collection paths and bindings, when they are read, then the accessors expose copies and the by-path map")
+  void exposesCollectionPathsAndBindings() {
+    State configured = new State();
+    configured.collectionFilePaths.add("/repo/users.json");
+    configured.collectionBindings.add(new CollectionBinding("/repo/users.json", "service-a"));
+
+    settings.setState(configured);
+
+    assertThat(settings.getCollectionFilePaths()).containsExactly("/repo/users.json");
+    assertThat(settings.getCollectionBindings())
+        .extracting(CollectionBinding::getModuleName)
+        .containsExactly("service-a");
+    assertThat(settings.collectionBindingsByPath())
+        .containsExactly(Map.entry("/repo/users.json", "service-a"));
+    assertThat(settings.getCollectionFilePaths()).isUnmodifiable();
+    assertThat(settings.getCollectionBindings()).isUnmodifiable();
+  }
+
+  @Test
+  @DisplayName(
+      "Given existing settings, when they are updated, then the mutation is applied and previous values survive")
+  void appliesUpdatesAndKeepsPreviousValues() {
+    State configured = new State();
+    configured.basePath = "/api/v1";
+    settings.setState(configured);
+
+    settings.update(updated -> {
+      updated.openApiFilePath = "/repo/openapi.yaml";
+      updated.collectionFilePaths.add("/repo/users.json");
+    });
+
+    assertThat(settings.getBasePath()).isEqualTo("/api/v1");
+    assertThat(settings.getOpenApiFilePath()).isEqualTo("/repo/openapi.yaml");
+    assertThat(settings.getCollectionFilePaths()).containsExactly("/repo/users.json");
+  }
+
+  @Test
+  @DisplayName("Given a null update mutation, when it is applied, then it fails fast")
+  void rejectsNullUpdateMutation() {
+    assertThatIllegalArgumentException().isThrownBy(() -> settings.update(null));
+  }
+
+  @Test
+  @DisplayName(
+      "Given a source type, when it is rendered, then a localized label instead of the persisted name is used")
+  void rendersLocalizedSourceTypeNames() {
+    assertThat(SourceType.OPEN_API.toString())
+        .isNotBlank()
+        .isNotEqualTo(SourceType.OPEN_API.name());
+    assertThat(SourceType.CONTROLLER_ANNOTATIONS.toString()).isNotBlank();
+    assertThat(SourceType.OPEN_API_AND_CONTROLLERS.toString()).isNotBlank();
   }
 }

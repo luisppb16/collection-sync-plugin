@@ -51,7 +51,7 @@ public final class KotlinEndpointSource implements EndpointSource {
   private static final Set<String> BASE_PATH_ANNOTATIONS =
       Set.of("RequestMapping", "Controller", "Path");
 
-  private static HttpMethod verbOf(String name) {
+  static HttpMethod verbOf(String name) {
     String base =
         name.endsWith("Mapping") ? name.substring(0, name.length() - "Mapping".length()) : name;
     try {
@@ -140,7 +140,7 @@ public final class KotlinEndpointSource implements EndpointSource {
     return paths.stream().distinct().toList();
   }
 
-  private static List<String> quotedStrings(String text) {
+  static List<String> quotedStrings(String text) {
     List<String> values = new ArrayList<>();
     Matcher matcher = QUOTED.matcher(text);
     while (matcher.find()) {

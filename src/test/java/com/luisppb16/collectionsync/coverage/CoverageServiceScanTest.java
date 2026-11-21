@@ -156,6 +156,26 @@ class CoverageServiceScanTest extends PsiTestCase {
         .isTrue();
   }
 
+  @Test
+  @DisplayName(
+      "Given both endpoint sources enabled, when a scan runs, then the OpenAPI endpoints and the controller scan are merged")
+  void mergesOpenApiAndControllerEndpoints() throws IOException {
+    Path spec = write("api.json", OPENAPI_SPEC);
+    EndpointCoverageSettings.State state = new EndpointCoverageSettings.State();
+    state.sourceType = EndpointCoverageSettings.SourceType.OPEN_API_AND_CONTROLLERS.name();
+    state.openApiFilePath = spec.toString();
+    EndpointCoverageSettings.getInstance(getFixture().getProject()).setState(state);
+    CoverageService service = new CoverageService(getFixture().getProject());
+
+    CoverageResult result = service.scan();
+
+    assertThat(result.uncoveredCount()).isEqualTo(1);
+    assertThat(result.rows())
+        .singleElement()
+        .satisfies(row -> assertThat(row.path()).isEqualTo("/carro"));
+    assertThat(lastScan(service).errors()).isEmpty();
+  }
+
   private Path write(String fileName, String content) throws IOException {
     Path path = tempDir.resolve(fileName);
     Files.writeString(path, content);
